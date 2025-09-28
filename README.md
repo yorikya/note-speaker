@@ -1,89 +1,80 @@
-# Note Speaker
+# DroidScript Note Secretary App
 
-A natural language note-taking assistant with LLM-powered command understanding, designed for Kivy/Buildozer Android apps (but works as a Python module).
+## Overview
+The `note_secretary_router.js` file now contains a complete DroidScript application with:
+- **Note Router Integration** - Processes commands in English and Hebrew
+- **Gemini AI Chat** - Conversational responses for unknown commands
+- **Conversation History** - Chat-like interface with timestamps
+- **TTS Support** - Text-to-speech for responses
+- **Auto Language Detection** - Automatically detects English/Hebrew input
 
 ## Features
 
-- **Create notes** using natural language ("create note shopping list").
-- **Find notes** with fuzzy and semantic matching ("find shopping list", "show note groceries").
-- **Update note descriptions** in a conversational, multi-step flow ("update description", then send lines, then "stop recording").
-- **Delete notes** with natural language confirmation ("delete", "remove it", etc.).
-- **Robust command recognition** using canonical phrases, fuzzy matching, and vector similarity.
+### 🎯 Main Functions
+- **`OnStart()`** - Main DroidScript entry point
+- **`CreateMainLayout()`** - Creates the UI layout
+- **`ProcessUserInput()`** - Processes user commands
+- **`UpdateConversationDisplay()`** - Updates chat display
+- **`UpdateConversationHistory()`** - Manages conversation history
+- **`SpeakText()`** - TTS integration
 
-## Installation
+### 🎨 UI Components
+- **Title** - "Note Secretary" header
+- **Status Display** - Shows current processing status
+- **Conversation History** - Scrollable chat display
+- **Input Field** - Text input for commands
+- **Process Button** - Processes user input
+- **Clear Button** - Clears conversation history
+- **TTS Toggle** - Enables/disables text-to-speech
 
-1. Clone the repository:
-   ```sh
-   git clone <your-repo-url>
-   cd note-speaker
-   ```
-2. Install dependencies:
-   ```sh
-   pip install -r requirements.txt
-   ```
-3. (Optional) For LLM-powered semantic matching, set up a Google Gemini API key:
-   ```sh
-   export GOOGLE_API_KEY=your-key-here
-   ```
+### 🤖 Supported Commands
+- **English**: "create a note groceries", "find note shopping", "delete note old"
+- **Hebrew**: "צור פתק קניות", "מצא פתק קניות", "מחק פתק ישן"
+- **Conversational**: "I want to remember something", "Help me organize my notes"
+
+### 🔧 Configuration
+- **API Key**: Set in `OnStart()` function
+- **TTS**: Toggleable via UI button
+- **Language**: Auto-detected from input
+- **Theme**: Dark theme with custom colors
 
 ## Usage
 
-Currently, the main entry point is via the `NLPService` class in Python. (A Kivy UI is planned.)
+### In DroidScript:
+1. Copy `note_secretary_router.js` to your DroidScript project
+2. The `OnStart()` function will automatically initialize the app
+3. Users can type commands and get responses
+4. Gemini AI handles unknown commands conversationally
 
-### Example Conversation (Python)
+### Example Commands:
+```
+User: "create a note groceries"
+Assistant: "Action: create_note (confidence: 1) Title: groceries"
 
-```python
-from src.nlp_service import NLPService
-nlp = NLPService()
+User: "I want to remember something"
+Assistant: "I can help you create a note! What would you like to remember?"
 
-# Create a note
-print(nlp.handle_command("create note shopping list", "create note shopping list"))
-# Output: Note created: shopping list
-
-# Find a note
-print(nlp.handle_command("find note shopping list", "find note shopping list"))
-# Output: Found 1 record 'shopping list'. Would you like me to update description or delete the record?
-
-# Update description (multi-step)
-print(nlp.handle_command("update description", "shopping list"))
-# Output: Starting description accumulation for 'shopping list'. Send your description lines. Say 'stop recording' to finish.
-print(nlp.handle_command("accumulate", "This note is for weekly shopping"))
-print(nlp.handle_command("accumulate", "Also for small items"))
-print(nlp.handle_command("stop recording", ""))
-# Output: Stopped recording. Updated 'shopping list' description.
-
-# Delete a note
-print(nlp.handle_command("delete", ""))
-# Output: Note "shopping list" was deleted.
+User: "צור פתק קניות"
+Assistant: "Action: create_note (confidence: 1) Title: קניות"
 ```
 
-### Example Natural Language Flows
+## Technical Details
 
-- "add a new note groceries"
-- "show note groceries"
-- "remove it" (after finding a note)
-- "update description" → "Milk, eggs, bread" → "stop recording"
-- "cancel" (to abort a multi-step flow)
+### Dependencies:
+- **Gemini API** - For conversational responses
+- **DroidScript Framework** - For UI and TTS
+- **XMLHttpRequest** - For API calls (available in DroidScript)
 
-## Requirements
-- Python 3.8+
-- [Kivy](https://kivy.org/)
-- [rapidfuzz](https://github.com/maxbachmann/RapidFuzz)
-- [pytest](https://docs.pytest.org/)
-- [google-generativeai](https://github.com/google/generative-ai-python) (optional, for LLM features)
+### Error Handling:
+- **No API Key** - Shows error message
+- **Network Issues** - Falls back to available commands
+- **Invalid Input** - Shows helpful suggestions
 
-## Testing
+### Performance:
+- **Conversation History** - Limited to 10 messages
+- **API Timeout** - 10 seconds
+- **Retry Logic** - 3 attempts for failed requests
 
-Run all tests with:
-```sh
-pytest
-```
+## Ready for Deployment! 🚀
 
-## Roadmap
-- Kivy/Buildozer Android UI
-- Persistent storage
-- More LLM-powered features
-
----
-
-*Note: This project is under active development. Contributions and feedback are welcome!* 
+The `note_secretary_router.js` file is now a complete DroidScript application that can be deployed directly.

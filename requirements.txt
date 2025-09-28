@@ -1,4 +1,0 @@
-kivy
-google-generativeai 
-pytest 
-rapidfuzz 

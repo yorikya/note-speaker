@@ -1,0 +1,726 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Note Secretary – DroidScript Backend</title>
+<style>
+  body { margin:0; font-family: system-ui, Arial, sans-serif; background:#0b0d10; color:#e6e6e6; }
+  .app { display:flex; flex-direction:column; height:100dvh; max-width:820px; margin:0 auto; }
+  header { padding:12px 16px; border-bottom:1px solid #222; display:flex; gap:8px; align-items:center; }
+  header h1 { font-size:16px; margin:0; font-weight:600; }
+  header .spacer { flex:1; }
+  select, button, input[type="text"] { background:#15181c; color:#e6e6e6; border:1px solid #2a2f36; border-radius:12px; padding:6px 10px; }
+  #log { flex:1; overflow:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
+  .msg { max-width:85%; padding:10px 12px; border-radius:14px; line-height:1.35; white-space:pre-wrap; }
+  .you { align-self:flex-end; background:#1f6feb; color:white; border-bottom-right-radius:4px; }
+  .bot { align-self:flex-start; background:#15181c; border:1px solid #2a2f36; border-bottom-left-radius:4px; }
+  .sys { align-self:center; font-size:12px; opacity:.8; }
+  form { display:flex; gap:8px; padding:12px 16px; border-top:1px solid #222; }
+  textarea { flex:1; resize:none; height:70px; background:#15181c; color:#e6e6e6; border:1px solid #2a2f36; border-radius:12px; padding:10px; }
+  button.primary { background:#1f6feb; color:white; border:none; border-radius:12px; padding:10px 14px; }
+  #micBtn { background:#15181c; color:#e6e6e6; border:1px solid #2a2f36; border-radius:12px; padding:10px 14px; cursor:pointer; font-size:16px; transition: all 0.3s ease; }
+  #micBtn.recording { background:#ff4444 !important; animation: pulse 1.5s infinite; }
+  @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+  .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:8px 16px; }
+  .warn { font-size:12px; opacity:.75; padding:0 16px; }
+  .hidden { display:none; }
+  
+  /* Side Menu Styles */
+  .side-menu { position:fixed; top:0; left:-300px; width:300px; height:100vh; background:#1a1d21; border-right:1px solid #333; z-index:1000; transition:left 0.3s ease; }
+  .side-menu.open { left:0; }
+  .side-menu-header { padding:16px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; }
+  .side-menu-content { padding:16px; }
+  .side-menu h2 { margin:0 0 16px 0; font-size:18px; color:#e6e6e6; }
+  .side-menu label { display:block; margin-bottom:8px; color:#e6e6e6; font-size:14px; }
+  .side-menu input[type="text"], .side-menu input[type="password"] { width:100%; padding:8px; background:#2a2f36; color:#e6e6e6; border:1px solid #444; border-radius:6px; margin-bottom:16px; }
+  .side-menu button { background:#1f6feb; color:white; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; margin-right:8px; }
+  .side-menu button.secondary { background:#444; }
+  .overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:none; }
+  .overlay.show { display:block; }
+  
+  /* Commands Popup Styles */
+  .commands-popup { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:400px; max-height:80vh; background:#1a1d21; border:1px solid #333; border-radius:12px; z-index:1001; display:none; overflow:hidden; }
+  .commands-popup.show { display:block; }
+  .commands-header { padding:16px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; }
+  .commands-header h3 { margin:0; font-size:18px; color:#e6e6e6; }
+  .commands-header button { background:none; border:none; color:#e6e6e6; font-size:20px; cursor:pointer; }
+  .commands-content { padding:16px; max-height:60vh; overflow-y:auto; }
+  .command-category { margin-bottom:20px; }
+  .command-category h4 { margin:0 0 12px 0; font-size:14px; color:#e6e6e6; font-weight:600; }
+  .command-btn { display:block; width:100%; padding:8px 12px; margin-bottom:6px; background:#2a2f36; color:#e6e6e6; border:1px solid #444; border-radius:6px; cursor:pointer; font-size:14px; text-align:left; transition:all 0.2s ease; }
+  .command-btn:hover { background:#1f6feb; border-color:#1f6feb; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <button id="menuBtn" title="Settings">☰</button>
+    <h1>Note Secretary</h1>
+    <div class="spacer"></div>
+    <label for="lang">Lang:</label>
+    <select id="lang">
+      <option value="en" selected>EN</option>
+      <option value="he">HE</option>
+    </select>
+    <button id="clear">Clear</button>
+  </header>
+
+  <div class="row">
+    <input id="apiKey" class="hidden" type="text" placeholder="Paste Gemini API key (UNSAFE in browser)" style="min-width:280px;" />
+    <select id="model" class="hidden">
+      <option>gemini-1.5-flash</option>
+      <option>gemini-1.5-pro</option>
+    </select>
+  </div>
+  <p class="warn" id="tipSection">Tip: Try <code>create a note 'groceries'</code> (EN) or <code>צור פתק 'קניות'</code> (HE). For editing/deleting: <code>find note 'groceries'</code> then <code>edit</code> or <code>delete</code>. Speech works via the browser's Web Speech API. Gemini here is for **testing only**—your key is exposed.</p>
+
+  <div id="log"></div>
+
+  <form id="chat">
+    <textarea id="input" placeholder="Type a message…"></textarea>
+    <button class="primary" type="submit">Send</button>
+  </form>
+  
+  <div class="row" style="padding: 8px 16px; border-top: 1px solid #222;">
+    <label><input type="checkbox" id="useTTS"> 🔊 Read responses</label>
+    <button id="micBtn" title="Speech to text">🎤 Speak</button>
+    <button id="helpBtn" title="Quick commands">💡 Commands</button>
+  </div>
+</div>
+
+<!-- Commands Popup -->
+<div class="overlay" id="commandsOverlay"></div>
+<div class="commands-popup" id="commandsPopup">
+  <div class="commands-header">
+    <h3>Quick Commands</h3>
+    <button id="closeCommands">✕</button>
+  </div>
+  <div class="commands-content" id="commandsContent">
+    <!-- Commands will be populated dynamically based on current mode -->
+  </div>
+</div>
+
+<!-- Side Menu -->
+<div class="overlay" id="overlay"></div>
+<div class="side-menu" id="sideMenu">
+  <div class="side-menu-header">
+    <h2>Settings</h2>
+    <button id="closeMenu">✕</button>
+  </div>
+  <div class="side-menu-content">
+    <h3>Gemini API Configuration</h3>
+    <label for="geminiApiKey">Gemini API Key:</label>
+    <input type="password" id="geminiApiKey" placeholder="Enter your Gemini API key">
+    <button id="saveApiKey">Save API Key</button>
+    <button id="useDefaultKey" class="secondary">Use Default Key</button>
+    
+    <div style="margin-top:20px;">
+      <h3>Current Status</h3>
+      <div id="apiStatus">Using default API key</div>
+    </div>
+    
+    <div style="margin-top:20px;">
+      <h3>Debug Tools</h3>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <button id="showNotes">Show Notes (Debug)</button>
+        <button id="clearNotes" class="secondary" style="background:#ff4444;">Clear All Notes</button>
+      </div>
+      <div id="notesDisplay" style="margin-top:10px; padding:10px; background:#2a2f36; border-radius:6px; max-height:200px; overflow-y:auto; font-family:monospace; font-size:12px; white-space:pre-wrap; display:none;"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---------- Settings ---------- */
+const Settings = { 
+  lang: "en",
+  geminiApiKey: "AIzaSyC9dXJT4ol3i2VoK6aqLjX5S7IMKSjwNC4" // Default API key
+};
+
+/* ---------- UI wiring ---------- */
+const logEl   = document.getElementById("log");
+const inputEl = document.getElementById("input");
+const formEl  = document.getElementById("chat");
+const langSel = document.getElementById("lang");
+const clearBtn= document.getElementById("clear");
+const micBtn  = document.getElementById("micBtn");
+const useTTS  = document.getElementById("useTTS");
+const apiKey  = document.getElementById("apiKey");
+const modelEl = document.getElementById("model");
+
+// Side menu elements
+const menuBtn = document.getElementById("menuBtn");
+const sideMenu = document.getElementById("sideMenu");
+const overlay = document.getElementById("overlay");
+const closeMenu = document.getElementById("closeMenu");
+const geminiApiKey = document.getElementById("geminiApiKey");
+const saveApiKey = document.getElementById("saveApiKey");
+const useDefaultKey = document.getElementById("useDefaultKey");
+const apiStatus = document.getElementById("apiStatus");
+const showNotes = document.getElementById("showNotes");
+const notesDisplay = document.getElementById("notesDisplay");
+const clearNotes = document.getElementById("clearNotes");
+
+// Commands popup elements
+const helpBtn = document.getElementById("helpBtn");
+const commandsPopup = document.getElementById("commandsPopup");
+const commandsOverlay = document.getElementById("commandsOverlay");
+const closeCommands = document.getElementById("closeCommands");
+const commandsContent = document.getElementById("commandsContent");
+
+// Track current mode for dynamic commands
+let currentMode = 'main'; // main, find_context, story_editing, pending_creation, etc.
+
+// Function to update mode based on backend messages
+function updateModeFromMessage(message) {
+  if (message.includes("What would you like to do?") || message.includes("מה תרצה לעשות?")) {
+    currentMode = 'find_context';
+  } else if (message.includes("To start editing") || message.includes("כדי להתחיל לערוך")) {
+    currentMode = 'story_editing';
+  } else if (message.includes("Do you want to create") || message.includes("האם תרצה ליצור") || 
+             message.includes("Do you want to delete") || message.includes("האם תרצה למחוק") ||
+             message.includes("Do you want to mark") || message.includes("האם תרצה לסמן")) {
+    currentMode = 'pending_creation';
+  } else if (message.includes("Which note would you like to select") || message.includes("איזה פתק תרצה לבחור")) {
+    currentMode = 'note_selection';
+  } else if (message.includes("updated successfully") || message.includes("עודכן בהצלחה") ||
+             message.includes("created successfully") || message.includes("נוצר בהצלחה") ||
+             message.includes("deleted successfully") || message.includes("נמחק בהצלחה")) {
+    currentMode = 'main';
+  } else if (message.includes("cancelled") || message.includes("בוטל")) {
+    currentMode = 'main';
+  }
+}
+
+langSel.onchange = () => {
+  Settings.lang = langSel.value;
+  document.documentElement.dir = (Settings.lang === "he") ? "rtl" : "ltr";
+};
+clearBtn.onclick = () => { logEl.innerHTML = ""; };
+
+/* ---------- Commands Popup Functionality ---------- */
+// Function to populate commands based on current mode
+function populateCommands() {
+  commandsContent.innerHTML = '';
+  
+  if (currentMode === 'main') {
+    // Main mode - show primary commands
+    commandsContent.innerHTML = `
+      <div class="command-category">
+        <h4>📝 Create</h4>
+        <button class="command-btn" data-command="create note">Create note</button>
+        <button class="command-btn" data-command="create story">Create story</button>
+      </div>
+      <div class="command-category">
+        <h4>🔍 Find</h4>
+        <button class="command-btn" data-command="find note">Find notes</button>
+        <button class="command-btn" data-command="find note by id">Find by ID</button>
+      </div>
+      <div class="command-category">
+        <h4>❓ Help</h4>
+        <button class="command-btn" data-command="help">Get help</button>
+      </div>
+    `;
+  } else if (currentMode === 'find_context') {
+    // Find context - show sub-commands for found note
+    commandsContent.innerHTML = `
+      <div class="command-category">
+        <h4>✏️ Actions</h4>
+        <button class="command-btn" data-command="edit description">Edit description</button>
+        <button class="command-btn" data-command="mark done">Mark done</button>
+        <button class="command-btn" data-command="delete">Delete</button>
+        <button class="command-btn" data-command="create sub-note">Create sub-note</button>
+      </div>
+      <div class="command-category">
+        <h4>❓ Help</h4>
+        <button class="command-btn" data-command="help">Get help</button>
+      </div>
+      <div class="command-category">
+        <h4>🚫 Cancel</h4>
+        <button class="command-btn" data-command="cancel">Cancel action</button>
+      </div>
+    `;
+  } else if (currentMode === 'story_editing') {
+    // Story editing mode - show story-specific commands
+    commandsContent.innerHTML = `
+      <div class="command-category">
+        <h4>📖 Story Mode</h4>
+        <button class="command-btn" data-command="stop editing description">Stop editing</button>
+      </div>
+      <div class="command-category">
+        <h4>❓ Help</h4>
+        <button class="command-btn" data-command="help">Get help</button>
+      </div>
+      <div class="command-category">
+        <h4>🚫 Cancel</h4>
+        <button class="command-btn" data-command="cancel">Cancel editing</button>
+      </div>
+    `;
+  } else if (currentMode === 'pending_creation') {
+    // Pending creation - show confirmation commands
+    commandsContent.innerHTML = `
+      <div class="command-category">
+        <h4>✅ Confirm</h4>
+        <button class="command-btn" data-command="yes">Yes</button>
+        <button class="command-btn" data-command="no">No</button>
+      </div>
+      <div class="command-category">
+        <h4>🚫 Cancel</h4>
+        <button class="command-btn" data-command="cancel">Cancel</button>
+      </div>
+    `;
+  } else if (currentMode === 'note_selection') {
+    // Note selection from multiple results
+    commandsContent.innerHTML = `
+      <div class="command-category">
+        <h4>🔢 Select</h4>
+        <button class="command-btn" data-command="1">Select 1</button>
+        <button class="command-btn" data-command="2">Select 2</button>
+        <button class="command-btn" data-command="3">Select 3</button>
+      </div>
+      <div class="command-category">
+        <h4>🚫 Cancel</h4>
+        <button class="command-btn" data-command="cancel">Cancel</button>
+      </div>
+    `;
+  }
+}
+
+helpBtn.onclick = () => {
+  populateCommands();
+  commandsPopup.classList.add("show");
+  commandsOverlay.classList.add("show");
+};
+
+closeCommands.onclick = () => {
+  commandsPopup.classList.remove("show");
+  commandsOverlay.classList.remove("show");
+};
+
+commandsOverlay.onclick = () => {
+  commandsPopup.classList.remove("show");
+  commandsOverlay.classList.remove("show");
+};
+
+// Handle command button clicks
+document.addEventListener('click', (e) => {
+  if (e.target.classList.contains('command-btn')) {
+    const command = e.target.getAttribute('data-command');
+    if (command) {
+      // Add the command to the input field with whitespace at the end
+      inputEl.value = command + ' ';
+      // Close the popup
+      commandsPopup.classList.remove("show");
+      commandsOverlay.classList.remove("show");
+      // Focus on the input field
+      inputEl.focus();
+    }
+  }
+});
+
+/* ---------- Side Menu Functionality ---------- */
+menuBtn.onclick = () => {
+  sideMenu.classList.add("open");
+  overlay.classList.add("show");
+  loadStoredApiKey();
+};
+
+closeMenu.onclick = () => {
+  sideMenu.classList.remove("open");
+  overlay.classList.remove("show");
+};
+
+overlay.onclick = () => {
+  sideMenu.classList.remove("open");
+  overlay.classList.remove("show");
+};
+
+// Load stored API key from localStorage
+function loadStoredApiKey() {
+  const storedKey = localStorage.getItem('geminiApiKey');
+  if (storedKey) {
+    geminiApiKey.value = storedKey;
+    Settings.geminiApiKey = storedKey;
+    apiStatus.textContent = "Using custom API key";
+    apiStatus.style.color = "#4CAF50";
+  } else {
+    apiStatus.textContent = "Using default API key";
+    apiStatus.style.color = "#FFA500";
+  }
+}
+
+// Save API key
+saveApiKey.onclick = () => {
+  const key = geminiApiKey.value.trim();
+  if (key) {
+    localStorage.setItem('geminiApiKey', key);
+    Settings.geminiApiKey = key;
+    apiStatus.textContent = "Using custom API key";
+    apiStatus.style.color = "#4CAF50";
+    addMsg("✅ API key saved successfully!", "sys");
+    
+    // Send API key to backend for daily summary
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({
+          type: 'save_settings',
+          geminiApiKey: key
+        }));
+      } catch (error) {
+        console.log("Error sending API key to backend:", error);
+      }
+    }
+  } else {
+    addMsg("❌ Please enter a valid API key", "sys");
+  }
+};
+
+// Use default API key
+useDefaultKey.onclick = () => {
+  localStorage.removeItem('geminiApiKey');
+  Settings.geminiApiKey = "AIzaSyC9dXJT4ol3i2VoK6aqLjX5S7IMKSjwNC4";
+  geminiApiKey.value = "";
+  apiStatus.textContent = "Using default API key";
+  apiStatus.style.color = "#FFA500";
+  addMsg("✅ Switched to default API key", "sys");
+  
+  // Send default API key to backend for daily summary
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    try {
+      ws.send(JSON.stringify({
+        type: 'save_settings',
+        geminiApiKey: "AIzaSyC9dXJT4ol3i2VoK6aqLjX5S7IMKSjwNC4"
+      }));
+    } catch (error) {
+      console.log("Error sending default API key to backend:", error);
+    }
+  }
+};
+
+// Show notes debug
+showNotes.onclick = () => {
+  if (notesDisplay.style.display === "none") {
+    // Request notes from backend
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({type:'debug', action:'get_notes'}));
+        showNotes.textContent = "Hide Notes";
+        notesDisplay.style.display = "block";
+      } catch (error) {
+        addMsg("Error sending debug request: " + error.message, "sys");
+      }
+    } else {
+      addMsg("Not connected to backend", "sys");
+    }
+  } else {
+    // Hide notes
+    showNotes.textContent = "Show Notes (Debug)";
+    notesDisplay.style.display = "none";
+  }
+};
+
+// Clear all notes
+clearNotes.onclick = () => {
+  if (confirm("Are you sure you want to clear ALL notes? This action cannot be undone.")) {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      try {
+        ws.send(JSON.stringify({type:'debug', action:'clear_notes'}));
+        addMsg("Clearing all notes...", "sys");
+      } catch (error) {
+        addMsg("Error sending clear request: " + error.message, "sys");
+      }
+    } else {
+      addMsg("Not connected to backend", "sys");
+    }
+  }
+};
+
+/* ---------- WebSocket connection to DroidScript backend ---------- */
+let ws;
+function connect(){
+  // Connect to DroidScript WebSocket server on localhost:8080
+  const url = 'ws://localhost:8080';
+  ws = new WebSocket(url);
+  ws.onopen = ()=>addMsg('Connected to DroidScript backend','sys');
+  ws.onclose= ()=>addMsg('Disconnected from backend','sys');
+  ws.onerror= e=>addMsg('WebSocket error','sys');
+  ws.onmessage = ev=>{
+    try{ 
+      const msg=JSON.parse(ev.data); 
+      if(msg.type==='reply') {
+        addMsg(msg.text,'bot');
+        
+        // Update mode based on backend message
+        updateModeFromMessage(msg.text);
+        
+        // Simple message handling (no more graph popups)
+        
+        // Check if we're entering story editing mode from backend
+        if (msg.text.includes("To start editing the story description") || msg.text.includes("כדי להתחיל לערוך את תיאור הסיפור")) {
+          enterStoryMode(null); // Backend will manage the note ID
+        }
+        
+        // Check if story editing is complete
+        if (msg.text.includes("updated successfully") || msg.text.includes("עודכן בהצלחה") || 
+            msg.text.includes("update cancelled") || msg.text.includes("עדכון בוטל")) {
+          exitStoryMode();
+        }
+      }
+      else if(msg.type==='debug_notes') {
+        notesDisplay.textContent = msg.notes;
+        notesDisplay.style.display = "block";
+      }
+      else if(msg.type==='debug_cleared') {
+        addMsg("All notes cleared successfully!", "sys");
+        // Hide notes display if it's showing
+        notesDisplay.style.display = "none";
+        showNotes.textContent = "Show Notes (Debug)";
+      }
+      else addMsg(ev.data,'sys'); 
+    }
+    catch{ addMsg(ev.data,'bot'); }
+  };
+}
+
+/* ---------- Story Mode Functions ---------- */
+function enterStoryMode(noteId) {
+  storyMode = true;
+  currentStoryNoteId = noteId;
+  storyBuffer = "";
+  inputEl.value = "";
+  addMsg("📝 Story mode activated. Start recording or typing your story...", "sys");
+}
+
+function exitStoryMode() {
+  storyMode = false;
+  currentStoryNoteId = null;
+  storyBuffer = "";
+}
+
+// Story description updates are now handled by the backend
+
+/* ---------- Chat flow ---------- */
+formEl.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const text = (inputEl.value || "").trim();
+  if (!text) return;
+
+  addMsg(text, "you");
+  
+  // Always send to backend - let backend handle story editing mode
+  inputEl.value = "";
+  
+  // Send to DroidScript backend via WebSocket for intent processing
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    try {
+      const message = {type:'chat', text, lang: Settings.lang };
+      ws.send(JSON.stringify(message));
+    } catch (error) {
+      addMsg("Error sending message: " + error.message, "sys");
+    }
+  } else {
+    addMsg("Not connected to backend. Trying to reconnect...", "sys");
+    connect();
+  }
+  scrollToBottom();
+});
+
+/* ---------- Speech-to-Text (Web Speech API) ---------- */
+let rec = null;
+let isRecording = false;
+let storyMode = false;
+let currentStoryNoteId = null;
+let storyBuffer = "";
+
+micBtn.onclick = () => {
+  if (isRecording) {
+    stopRecording();
+  } else {
+    startRecording();
+  }
+};
+
+function startRecording() {
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SR) { 
+    addMsg("❌ Speech Recognition not supported in this browser.", "sys"); 
+    return; 
+  }
+  
+  try {
+    if (!rec) {
+      rec = new SR();
+      rec.continuous = true;
+      rec.interimResults = true;
+      rec.maxAlternatives = 1;
+      
+      rec.onstart = () => {
+        isRecording = true;
+        micBtn.textContent = "■ Stop Recording";
+        micBtn.classList.add("recording");
+        addMsg("🎤 Listening... Speak now", "sys");
+      };
+      
+      rec.onresult = (e) => {
+        let finalTranscript = "";
+        let interimTranscript = "";
+        
+        for (let i = e.resultIndex; i < e.results.length; i++) {
+          const transcript = e.results[i][0].transcript;
+          if (e.results[i].isFinal) {
+            finalTranscript += transcript;
+          } else {
+            interimTranscript += transcript;
+          }
+        }
+        
+        if (storyMode) {
+          // In story mode, show the current transcript in input field
+          // The backend will handle accumulating the content
+          if (finalTranscript) {
+            inputEl.value = finalTranscript;
+          } else if (interimTranscript) {
+            inputEl.value = interimTranscript;
+          }
+        } else {
+          // Normal mode - replace content
+          if (finalTranscript) {
+            inputEl.value = finalTranscript;
+          } else if (interimTranscript) {
+            inputEl.value = interimTranscript;
+          }
+        }
+      };
+      
+      rec.onerror = (e) => {
+        addMsg("❌ Speech recognition error: " + e.error, "sys");
+        stopRecording();
+      };
+      
+      rec.onend = () => {
+        stopRecording();
+      };
+    }
+    
+    // Set language
+    rec.lang = (Settings.lang === "he") ? "he-IL" : "en-US";
+    
+    // Clear input field
+    inputEl.value = "";
+    
+    // Start recognition
+    rec.start();
+    
+  } catch (error) {
+    addMsg("❌ Failed to start speech recognition: " + error.message, "sys");
+  }
+}
+
+function stopRecording() {
+  if (rec && isRecording) {
+    rec.stop();
+  }
+  isRecording = false;
+  micBtn.textContent = "🎤 Speak";
+  micBtn.classList.remove("recording");
+  
+  if (storyMode) {
+    if (inputEl.value.trim()) {
+      addMsg("✅ Story content ready. You can continue recording or send to complete the story.", "sys");
+    }
+  } else {
+    if (inputEl.value.trim()) {
+      addMsg("✅ Ready to send: " + inputEl.value, "sys");
+    }
+  }
+}
+
+/* ---------- Gemini direct (UNSAFE) ---------- */
+async function callGemini(model, userText, lang) {
+  const apiKey = Settings.geminiApiKey; // Use stored API key
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+  const body = {
+    contents: [{ role: "user", parts: [{ text: `Language hint: ${lang}\nUser: ${userText}` }] }],
+    generationConfig: { temperature: 0.3, topP: 0.9, maxOutputTokens: 512 }
+  };
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) throw new Error(await r.text());
+  const j = await r.json();
+  return j?.candidates?.[0]?.content?.parts?.map(p => p.text).join("") || "";
+}
+
+/* ---------- Text-to-Speech ---------- */
+async function speakText(text) {
+  if (!useTTS.checked) return;
+  
+  const lang = (Settings.lang === "he") ? "he" : "en";
+  const url = `https://translate.google.com/translate_tts?ie=UTF-8&tl=${lang}&client=tw-ob&q=${encodeURIComponent(text)}`;
+  
+  try {
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    
+    if (response.ok) {
+      const audioBlob = await response.blob();
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+      audio.play();
+      audio.onended = () => URL.revokeObjectURL(audioUrl);
+    } else {
+      addMsg("❌ Cannot read message: No internet connection", "sys");
+    }
+  } catch (error) {
+    addMsg("❌ Cannot read message: No internet connection", "sys");
+  }
+}
+
+/* ---------- Utilities ---------- */
+function addMsg(text, who) {
+  const div = document.createElement("div");
+  div.className = "msg " + (who === "you" ? "you" : who === "bot" ? "bot" : "sys");
+  div.textContent = text; logEl.appendChild(div);
+  
+  // Speak bot responses if TTS is enabled
+  if (who === "bot" && useTTS.checked) {
+    speakText(text);
+  }
+  
+  scrollToBottom();
+}
+function scrollToBottom(){ logEl.scrollTop = logEl.scrollHeight; }
+
+// Initialize settings on page load
+function initializeSettings() {
+  // Load stored API key
+  const storedKey = localStorage.getItem('geminiApiKey');
+  if (storedKey) {
+    Settings.geminiApiKey = storedKey;
+  }
+}
+
+// Hide tip section after 10 seconds
+function hideTipAfterDelay() {
+  const tipSection = document.getElementById('tipSection');
+  if (tipSection) {
+    setTimeout(() => {
+      tipSection.style.display = 'none';
+    }, 10000); // 10 seconds
+  }
+}
+
+// Connect to DroidScript backend on page load
+initializeSettings();
+connect();
+hideTipAfterDelay();
+</script>
+</body>
+</html>
