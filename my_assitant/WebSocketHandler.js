@@ -96,7 +96,108 @@ var WebSocketHandler = {
         
         Settings.lang = (o.lang === "he") ? "he" : "en";
         
-        // Check for yes/no responses to create_note confirmation
+        console.log("DEBUG: onWsReceive - calling detectIntent with text='" + o.text + "'");
+        var det = CommandRouter.detectIntent(o.text, Settings);
+        console.log("DEBUG: onWsReceive - detectIntent returned:", JSON.stringify(det));
+        
+        // Handle slash commands that need to set state BEFORE formatOutcome
+        if (det.action === "slash_createsub") {
+            var context = StateManager.getCurrentFindContext();
+            if (context && context.length > 0) {
+                var note = context[0].note || context[0];
+                StateManager.setPendingSubNoteCreation(note.id);
+                console.log("DEBUG: Set pending sub-note creation for note ID:", note.id);
+            }
+        }
+        
+        // Handle other commands that set pending states
+        if (det.action === "slash_createnote" && det.params?.hasParameter && det.params?.title) {
+            StateManager.setPendingNoteCreation(det.params.title, null);
+            console.log("DEBUG: Set pending note creation for title:", det.params.title);
+        }
+        
+        if (det.action === "slash_createstory" && det.params?.hasParameter && det.params?.title) {
+            StateManager.setPendingStoryCreation(det.params.title);
+            console.log("DEBUG: Set pending story creation for title:", det.params.title);
+        }
+        
+        // Handle sub-commands that set pending states
+        if (det.action === "find_sub_edit_description") {
+            var context = StateManager.getCurrentFindContext();
+            if (context && context.length > 0) {
+                var note = context[0].note || context[0];
+                StateManager.setStoryEditingMode(note.id, note.title);
+                StateManager.clearCurrentFindContext();
+                console.log("DEBUG: Set story editing mode for note ID:", note.id, "title:", note.title);
+                console.log("DEBUG: Story editing mode after setting:", StateManager.getStoryEditingMode());
+            }
+        }
+        
+        if (det.action === "slash_editdescription") {
+            var context = StateManager.getCurrentFindContext();
+            if (context && context.length > 0) {
+                var note = context[0].note || context[0];
+                StateManager.setStoryEditingMode(note.id, note.title);
+                // Don't clear context here - let formatOutcome handle it
+                console.log("DEBUG: Set story editing mode for note ID:", note.id, "title:", note.title);
+                console.log("DEBUG: Story editing mode after setting:", StateManager.getStoryEditingMode());
+            }
+        }
+        
+        if (det.action === "slash_talkai") {
+            var context = StateManager.getCurrentFindContext();
+            if (context && context.length > 0) {
+                var note = context[0].note || context[0];
+                StateManager.setAiConversationMode(note); // Pass the full note object
+                // Don't clear context here - let formatOutcome handle it
+                console.log("DEBUG: Set AI conversation mode for note ID:", note.id, "title:", note.title);
+                console.log("DEBUG: AI conversation mode after setting:", StateManager.getAiConversationMode());
+            }
+        }
+        
+        if (det.action === "find_sub_delete") {
+            var context = StateManager.getCurrentFindContext();
+            if (context && context.length > 0) {
+                var note = context[0].note || context[0];
+                StateManager.setPendingNoteDeletion(note.id);
+                console.log("DEBUG: Set pending note deletion for note ID:", note.id);
+            }
+        }
+        
+        if (det.action === "find_sub_mark_done") {
+            var context = StateManager.getCurrentFindContext();
+            if (context && context.length > 0) {
+                var note = context[0].note || context[0];
+                StateManager.setPendingNoteMarkDone(note.id);
+                console.log("DEBUG: Set pending note mark done for note ID:", note.id);
+            }
+        }
+        
+        if (det.action === "slash_markdone") {
+            var context = StateManager.getCurrentFindContext();
+            if (context && context.length > 0) {
+                var note = context[0].note || context[0];
+                StateManager.setPendingNoteMarkDone(note.id);
+                console.log("DEBUG: Set pending note mark done for note ID:", note.id);
+            }
+        }
+        
+        if (det.action === "find_sub_talk_ai") {
+            var context = StateManager.getCurrentFindContext();
+            if (context && context.length > 0) {
+                var note = context[0].note || context[0];
+                StateManager.setAiConversationMode(note);
+                StateManager.clearCurrentFindContext();
+                console.log("DEBUG: Set AI conversation mode for note ID:", note.id);
+            }
+        }
+        
+        if (det.action === "slash_selectsubnote") {
+            // No state setting needed for selectsubnote - it's handled in formatOutcome
+            console.log("DEBUG: Processing slash_selectsubnote command");
+        }
+        
+        // Check for yes/no responses to confirmations AFTER setting pending states
         // But skip this check if we're waiting for a sub-note name
         if (!StateManager.getPendingSubNoteCreation()) {
             var response = this.handleConfirmationResponse(o.text);
@@ -109,9 +210,6 @@ var WebSocketHandler = {
             console.log("DEBUG: Skipping handleConfirmationResponse because waiting for sub-note name");
         }
         
-        console.log("DEBUG: onWsReceive - calling detectIntent with text='" + o.text + "'");
-        var det = CommandRouter.detectIntent(o.text, Settings);
-        console.log("DEBUG: onWsReceive - detectIntent returned:", JSON.stringify(det));
         var out = this.formatOutcome(det);
         console.log("DEBUG: onWsReceive - formatOutcome returned:", typeof out === 'string' ? out : JSON.stringify(out));
         
@@ -335,8 +433,21 @@ var WebSocketHandler = {
     // -------- Command Generation --------
     getAvailableCommands: function() {
         var lang = Settings.lang || "en";
-        var patterns = CommandRouter.getPatterns(lang);
         var commands = [];
+        
+        // Check current application state
+        var currentFindContext = StateManager.getCurrentFindContext();
+        var storyEditingMode = StateManager.getStoryEditingMode();
+        var aiConversationMode = StateManager.getAiConversationMode();
+        var pendingNoteCreation = StateManager.getPendingNoteCreation();
+        var pendingNoteDeletion = StateManager.getPendingNoteDeletion();
+        var pendingNoteMarkDone = StateManager.getPendingNoteMarkDone();
+        var pendingSubNoteCreation = StateManager.getPendingSubNoteCreation();
+        var pendingStoryCreation = StateManager.getPendingStoryCreation();
+        
+        console.log("DEBUG: getAvailableCommands - currentFindContext:", currentFindContext);
+        console.log("DEBUG: getAvailableCommands - storyEditingMode:", storyEditingMode);
+        console.log("DEBUG: getAvailableCommands - aiConversationMode:", aiConversationMode);
         
         // Define command metadata
         var commandMetadata = {
@@ -344,111 +455,174 @@ var WebSocketHandler = {
                 category: "📝 Create", 
                 description: "Create a new note",
                 examples: ["/createnote groceries", "/createnote my task"],
-                requiresParam: true
+                requiresParam: true,
+                contexts: ["main"] // Only in main context
             },
             slash_create_story: { 
                 category: "📝 Create", 
                 description: "Create a long story",
                 examples: ["/createstory my story", "/createstory daily journal"],
-                requiresParam: true
+                requiresParam: true,
+                contexts: ["main"] // Only in main context
             },
             slash_find_note: { 
                 category: "🔍 Find", 
                 description: "Search for notes",
                 examples: ["/findnote shopping", "/findnote my tasks"],
-                requiresParam: true
+                requiresParam: true,
+                contexts: ["main"] // Only in main context
             },
             slash_find_by_id: { 
                 category: "🔍 Find", 
                 description: "Find note by ID",
                 examples: ["/findbyid 5", "/findbyid 12"],
-                requiresParam: true
+                requiresParam: true,
+                contexts: ["main"] // Only in main context
             },
             slash_show_parents: { 
                 category: "📋 Show", 
                 description: "Show parent notes",
                 examples: ["/showparents"],
-                requiresParam: false
+                requiresParam: false,
+                contexts: ["main"] // Only in main context
             },
             slash_help: { 
                 category: "❓ Help", 
                 description: "Show help",
                 examples: ["/help"],
-                requiresParam: false
+                requiresParam: false,
+                contexts: ["main", "find_context", "story_editing", "ai_conversation", "pending_creation"] // Available in all contexts
+            },
+            slash_editdescription: { 
+                category: "✏️ Edit", 
+                description: "Edit note description",
+                examples: ["/editdescription"],
+                requiresParam: false,
+                contexts: ["find_context"] // Only when a note is found
+            },
+            slash_markdone: { 
+                category: "✅ Mark", 
+                description: "Mark note as done",
+                examples: ["/markdone"],
+                requiresParam: false,
+                contexts: ["find_context"] // Only when a note is found
+            },
+            slash_delete: { 
+                category: "🗑️ Delete", 
+                description: "Delete note",
+                examples: ["/delete"],
+                requiresParam: false,
+                contexts: ["find_context"] // Only when a note is found
+            },
+            slash_createsub: { 
+                category: "📝 Create", 
+                description: "Create sub-note",
+                examples: ["/createsub"],
+                requiresParam: false,
+                contexts: ["find_context"] // Only when a note is found
+            },
+            slash_talkai: { 
+                category: "🤖 AI", 
+                description: "Start AI conversation",
+                examples: ["/talkai"],
+                requiresParam: false,
+                contexts: ["find_context"] // Only when a note is found
+            },
+            slash_selectsubnote: { 
+                category: "🔍 Navigate", 
+                description: "Select a sub-note",
+                examples: ["/selectsubnote 2", "/selectsub 3", "/sub 4"],
+                requiresParam: true,
+                contexts: ["find_context"] // Only when a note is found
+            },
+            slash_stopediting: { 
+                category: "📝 Edit", 
+                description: "Stop editing description",
+                examples: ["/stopediting"],
+                requiresParam: false,
+                contexts: ["story_editing"] // Only when editing
+            },
+            slash_cancel: { 
+                category: "🚫 Cancel", 
+                description: "Cancel current action",
+                examples: ["/cancel"],
+                requiresParam: false,
+                contexts: ["find_context", "story_editing", "ai_conversation", "pending_creation"] // Available in most contexts
+            },
+            yes_response: { 
+                category: "✅ Confirm", 
+                description: "Confirm the action",
+                examples: ["yes", "y", "yeah", "sure", "ok"],
+                requiresParam: false,
+                contexts: ["pending_creation"] // Only when waiting for confirmation
+            },
+            no_response: { 
+                category: "❌ Decline", 
+                description: "Decline the action",
+                examples: ["no", "n", "nope", "cancel"],
+                requiresParam: false,
+                contexts: ["pending_creation"] // Only when waiting for confirmation
             }
         };
         
-        // Extract commands from patterns
-        for (var action in patterns) {
-            if (action.startsWith("slash_") && commandMetadata[action]) {
+        // Determine current context
+        var currentContext = "main"; // Default
+        
+        if (storyEditingMode) {
+            currentContext = "story_editing";
+        } else if (aiConversationMode) {
+            currentContext = "ai_conversation";
+        } else if (pendingNoteCreation || pendingNoteDeletion || pendingNoteMarkDone || pendingSubNoteCreation || pendingStoryCreation) {
+            currentContext = "pending_creation";
+        } else if (currentFindContext && currentFindContext.length > 0) {
+            currentContext = "find_context";
+        }
+        
+        console.log("DEBUG: getAvailableCommands - determined context:", currentContext);
+        
+        // Extract commands based on current context
+        for (var action in commandMetadata) {
+            if (action.startsWith("slash_") || action.endsWith("_response")) {
                 var metadata = commandMetadata[action];
-                var patterns_list = patterns[action];
                 
-                // Find the compact command format (prefer compact over shortest)
-                var compactCommand = null;
-                var shortestCommand = null;
-                
-                for (var i = 0; i < patterns_list.length; i++) {
-                    var pattern = patterns_list[i];
-                    var patternStr = pattern.toString();
+                // Check if this command is available in current context
+                if (metadata.contexts.includes(currentContext)) {
+                    // Map action to command prefix
+                    var commandMap = {
+                        'slash_create_note': '/createnote',
+                        'slash_create_story': '/createstory',
+                        'slash_find_note': '/findnote',
+                        'slash_find_by_id': '/findbyid',
+                        'slash_show_parents': '/showparents',
+                        'slash_help': '/help',
+                        'slash_editdescription': '/editdescription',
+                        'slash_markdone': '/markdone',
+                        'slash_delete': '/delete',
+                        'slash_createsub': '/createsub',
+                        'slash_talkai': '/talkai',
+                        'slash_selectsubnote': '/selectsubnote',
+                        'slash_stopediting': '/stopediting',
+                        'slash_cancel': '/cancel',
+                        'yes_response': 'yes',
+                        'no_response': 'no'
+                    };
                     
-                    // Extract command from regex pattern - handle different regex formats
-                    var match = patternStr.match(/^\/(.+?)(?:\$|\s|\\s)/);
-                    if (match) {
-                        var cmd = "/" + match[1];
-                        
-                        // Clean up any regex escape sequences
-                        cmd = cmd.replace(/\\\//g, '/');  // Remove escaped slashes
-                        cmd = cmd.replace(/\\\^/g, '');    // Remove escaped carets
-                        cmd = cmd.replace(/\\\$/g, '');    // Remove escaped dollar signs
-                        cmd = cmd.replace(/\\s/g, '');     // Remove escaped spaces
-                        cmd = cmd.replace(/\\+/g, '');     // Remove escaped plus signs
-                        cmd = cmd.replace(/\\d/g, '');      // Remove escaped digits
-                        cmd = cmd.replace(/\\w/g, '');     // Remove escaped word chars
-                        cmd = cmd.replace(/\\b/g, '');     // Remove escaped word boundaries
-                        cmd = cmd.replace(/\\\(/g, '');    // Remove escaped parentheses
-                        cmd = cmd.replace(/\\\)/g, '');    // Remove escaped parentheses
-                        cmd = cmd.replace(/\\\[/g, '');    // Remove escaped brackets
-                        cmd = cmd.replace(/\\\]/g, '');     // Remove escaped brackets
-                        cmd = cmd.replace(/\\\?/g, '');     // Remove escaped question marks
-                        cmd = cmd.replace(/\\\*/g, '');     // Remove escaped asterisks
-                        cmd = cmd.replace(/\\\|/g, '');     // Remove escaped pipes
-                        cmd = cmd.replace(/\\\./g, '');     // Remove escaped dots
-                        cmd = cmd.replace(/\\\*/g, '');     // Remove escaped asterisks
-                        
-                        // Only keep commands that start with / and contain letters
-                        if (cmd.match(/^\/[a-zA-Z]/)) {
-                            // Prioritize compact commands (like /createnote, /findnote)
-                            if (cmd.includes("note") || cmd.includes("story") || cmd.includes("parents") || cmd.includes("help")) {
-                                if (!compactCommand) {
-                                    compactCommand = cmd;
-                                }
-                            } else {
-                                // Keep track of shortest for fallback
-                                if (!shortestCommand || cmd.length < shortestCommand.length) {
-                                    shortestCommand = cmd;
-                                }
-                            }
-                        }
+                    var command = commandMap[action];
+                    if (command) {
+                        commands.push({
+                            action: action,
+                            command: command,
+                            category: metadata.category,
+                            description: metadata.description,
+                            examples: metadata.examples,
+                            requiresParam: metadata.requiresParam
+                        });
                     }
-                }
-                
-                // Use compact command if available, otherwise use shortest
-                var selectedCommand = compactCommand || shortestCommand;
-                
-                if (selectedCommand) {
-                    commands.push({
-                        action: action,
-                        command: selectedCommand,
-                        category: metadata.category,
-                        description: metadata.description,
-                        examples: metadata.examples,
-                        requiresParam: metadata.requiresParam
-                    });
                 }
             }
         }
         
+        console.log("DEBUG: getAvailableCommands - returning commands:", commands.length);
         return commands;
     },
     
@@ -507,7 +681,7 @@ var WebSocketHandler = {
             if (r.params?.hasParameter && r.params?.title) {
                 // User provided title with command - create directly
                 var title = r.params.title;
-                StateManager.setPendingNoteCreation(title, null);
+                // Note: setPendingNoteCreation is now handled in handleChatMessage before formatOutcome
                 if (isHebrew) {
                     return "האם תרצה ליצור פתק בשם '" + title + "'? (כן/לא)";
                 }
@@ -526,7 +700,7 @@ var WebSocketHandler = {
             if (r.params?.hasParameter && r.params?.title) {
                 // User provided title with command - create directly
                 var title = r.params.title;
-                StateManager.setPendingStoryCreation(title);
+                // Note: setPendingStoryCreation is now handled in handleChatMessage before formatOutcome
                 if (isHebrew) {
                     return "האם תרצה ליצור סיפור בשם '" + title + "'? (כן/לא)";
                 }
@@ -565,9 +739,9 @@ var WebSocketHandler = {
                     var treeText = NoteManager.createNoteTree(note, children);
                     
                     if (isHebrew) {
-                        return "נמצא פתק אחד: '" + note.title + "' (ID: " + note.id + ").\n\n" + treeText + "\n\nמה תרצה לעשות? (/edit /delete /createsub /markdone /talkai)";
+                        return "נמצא פתק אחד: '" + note.title + "' (ID: " + note.id + ").\n\n" + treeText + "\n\nמה תרצה לעשות? (/editdescription /delete /createsub /markdone /talkai /selectsubnote)";
                     }
-                    return "Found 1 note: '" + note.title + "' (ID: " + note.id + ").\n\n" + treeText + "\n\nWhat would you like to do? (/edit /delete /createsub /markdone /talkai)";
+                    return "Found 1 note: '" + note.title + "' (ID: " + note.id + ").\n\n" + treeText + "\n\nWhat would you like to do? (/editdescription /delete /createsub /markdone /talkai /selectsubnote)";
                 } else {
                     var noteList = "";
                     for (var i = 0; i < Math.min(foundNotes.length, 5); i++) {
@@ -613,9 +787,9 @@ var WebSocketHandler = {
                 var treeText = NoteManager.createNoteTree(note, children);
                 
                 if (isHebrew) {
-                    return "נמצא פתק: '" + note.title + "' (ID: " + note.id + ").\n\n" + treeText + "\n\nמה תרצה לעשות? (/edit /delete /createsub /markdone /talkai)";
+                    return "נמצא פתק: '" + note.title + "' (ID: " + note.id + ").\n\n" + treeText + "\n\nמה תרצה לעשות? (/editdescription /delete /createsub /markdone /talkai /selectsubnote)";
                 }
-                return "Found note: '" + note.title + "' (ID: " + note.id + ").\n\n" + treeText + "\n\nWhat would you like to do? (/edit /delete /createsub /markdone /talkai)";
+                return "Found note: '" + note.title + "' (ID: " + note.id + ").\n\n" + treeText + "\n\nWhat would you like to do? (/editdescription /delete /createsub /markdone /talkai /selectsubnote)";
             } else {
                 // No ID provided - ask for it
                 CommandRouter.setPendingCommandCompletion("find_by_id", "slash_find_by_id");
@@ -700,6 +874,17 @@ var WebSocketHandler = {
                    "• `/findbyid [number]` - Find by ID\n\n" +
                    "📋 **Show Commands:**\n" +
                    "• `/showparents` - Show parent notes\n\n" +
+                   "✏️ **Edit Commands:**\n" +
+                   "• `/editdescription` - Edit note description\n" +
+                   "• `/stopediting` - Stop editing description\n" +
+                   "• `/markdone` - Mark note as done\n" +
+                   "• `/delete` - Delete note\n" +
+                   "• `/createsub` - Create sub-note\n" +
+                   "• `/selectsubnote [number]` - Select sub-note\n\n" +
+                   "🤖 **AI Commands:**\n" +
+                   "• `/talkai` - Start AI conversation\n\n" +
+                   "🚫 **Cancel Commands:**\n" +
+                   "• `/cancel` - Cancel current action\n\n" +
                    "💡 **Quick Examples:**\n" +
                    "• `/createnote shopping list`\n" +
                    "• `/findnote groceries`\n" +
@@ -714,9 +899,11 @@ var WebSocketHandler = {
         
         // Handle story content during editing mode
         if (r.action === "story_content") {
+            console.log("DEBUG: formatOutcome - processing story_content action");
             var content = r.params?.content;
             if (content) {
                 StateManager.addToStoryEditing(content);
+                console.log("DEBUG: Added to story editing:", content);
                 if (isHebrew) {
                     return "✅ הוספתי לתיאור הסיפור. המשך לכתוב או אמור 'עצור עריכת תיאור' לסיום.";
                 }
@@ -813,9 +1000,9 @@ var WebSocketHandler = {
             console.log("DEBUG: Created tree text:", treeText);
             
             if (isHebrew) {
-                return "נבחר הפתק: '" + selectedNote.title + "' (ID: " + selectedNote.id + ").\n\n" + treeText + "\n\nמה תרצה לעשות? (/edit /delete /createsub /markdone /talkai)";
+                return "נבחר הפתק: '" + selectedNote.title + "' (ID: " + selectedNote.id + ").\n\n" + treeText + "\n\nמה תרצה לעשות? (/editdescription /delete /createsub /markdone /talkai /selectsubnote)";
             }
-            return "Selected note: '" + selectedNote.title + "' (ID: " + selectedNote.id + ").\n\n" + treeText + "\n\nWhat would you like to do? (/edit /delete /createsub /markdone /talkai)";
+            return "Selected note: '" + selectedNote.title + "' (ID: " + selectedNote.id + ").\n\n" + treeText + "\n\nWhat would you like to do? (/editdescription /delete /createsub /markdone /talkai /selectsubnote)";
         }
         
         // Handle sub-commands
@@ -829,8 +1016,7 @@ var WebSocketHandler = {
             }
             
             var note = context[0].note || context[0];
-            // Set pending sub-note creation
-            StateManager.setPendingSubNoteCreation(note.id);
+            // Note: setPendingSubNoteCreation is now handled in handleChatMessage before formatOutcome
             if (isHebrew) {
                 return "אצור תת-פתק תחת '" + note.title + "'. מה השם של התת-פתק?";
             }
@@ -848,9 +1034,7 @@ var WebSocketHandler = {
             
             var note = context[0].note || context[0];
             
-            // Start story editing mode for the note
-            StateManager.setStoryEditingMode(note.id, note.title);
-            StateManager.clearCurrentFindContext();
+            // Note: setStoryEditingMode is now handled in handleChatMessage before formatOutcome
             
             if (isHebrew) {
                 return "אתחיל מצב עריכת תיאור עבור '" + note.title + "'. הקלד או הקלט את התוכן החדש. לסיום אמור 'עצור עריכת תיאור'.";
@@ -868,8 +1052,7 @@ var WebSocketHandler = {
             }
             
             var note = context[0].note || context[0];
-            // Set pending deletion for confirmation
-            StateManager.setPendingNoteDeletion(note.id);
+            // Note: setPendingNoteDeletion is now handled in handleChatMessage before formatOutcome
             if (isHebrew) {
                 return "האם תרצה למחוק את הפתק '" + note.title + "'? (כן/לא)";
             }
@@ -902,8 +1085,7 @@ var WebSocketHandler = {
                 return "Cannot mark note '" + note.title + "' as done because it has incomplete sub-notes:\n" + incompleteList + "\nPlease complete the sub-notes first.";
             }
             
-            // Set pending mark done for confirmation
-            StateManager.setPendingNoteMarkDone(note.id);
+            // Note: setPendingNoteMarkDone is now handled in handleChatMessage before formatOutcome
             if (isHebrew) {
                 return "האם תרצה לסמן את הפתק '" + note.title + "' כהושלם? (כן/לא)";
             }
@@ -921,14 +1103,62 @@ var WebSocketHandler = {
             
             var note = context[0].note || context[0];
             
-            // Start AI conversation mode with this note
-            StateManager.setAiConversationMode(note);
-            StateManager.clearCurrentFindContext();
+            // Note: setAiConversationMode is now handled in handleChatMessage before formatOutcome
             
             if (isHebrew) {
                 return "🤖 התחלתי שיחה עם AI על הפתק '" + note.title + "'. אמור 'cancel' לסיום השיחה.";
             }
             return "🤖 Started AI conversation about note '" + note.title + "'. Say 'cancel' to end the conversation.";
+        }
+        
+        if (r.action === "find_sub_select") {
+            var context = StateManager.getCurrentFindContext();
+            if (!context || context.length === 0) {
+                if (isHebrew) {
+                    return "לא נמצאו פתקים לבחירה. נסה לחפש קודם.";
+                }
+                return "No notes found to select from. Try searching first.";
+            }
+            
+            var parentNote = context[0].note || context[0];
+            var subNoteId = r.params?.subNoteId;
+            
+            if (!subNoteId) {
+                if (isHebrew) {
+                    return "אנא ציין את מזהה התת-פתק. לדוגמה: /selectsubnote 2";
+                }
+                return "Please specify the sub-note ID. For example: /selectsubnote 2";
+            }
+            
+            // Find the sub-note by ID
+            var subNotes = NoteManager.findNoteChildren(parentNote.id);
+            var selectedSubNote = null;
+            
+            for (var i = 0; i < subNotes.length; i++) {
+                if (subNotes[i].id === subNoteId) {
+                    selectedSubNote = subNotes[i];
+                    break;
+                }
+            }
+            
+            if (!selectedSubNote) {
+                if (isHebrew) {
+                    return "לא נמצא תת-פתק עם מזהה " + subNoteId + " תחת '" + parentNote.title + "'";
+                }
+                return "No sub-note found with ID " + subNoteId + " under '" + parentNote.title + "'";
+            }
+            
+            // Update context with the selected sub-note
+            StateManager.setCurrentFindContext([selectedSubNote]);
+            
+            // Find children of the selected sub-note
+            var children = NoteManager.findNoteChildren(selectedSubNote.id);
+            var treeText = NoteManager.createNoteTree(selectedSubNote, children);
+            
+            if (isHebrew) {
+                return "נבחר תת-פתק: '" + selectedSubNote.title + "' (ID: " + selectedSubNote.id + ").\n\n" + treeText + "\n\nמה תרצה לעשות? (/editdescription /delete /createsub /markdone /talkai /selectsubnote)";
+            }
+            return "Selected sub-note: '" + selectedSubNote.title + "' (ID: " + selectedSubNote.id + ").\n\n" + treeText + "\n\nWhat would you like to do? (/editdescription /delete /createsub /markdone /talkai /selectsubnote)";
         }
         
         // Handle cancel/abort action in find mode
@@ -967,11 +1197,43 @@ var WebSocketHandler = {
         }
         
         // Find sub-commands as slash commands
-        if (r.action === "slash_edit") {
-            return this.formatOutcome({action: "find_sub_edit_description", params: r.params, confidence: 1});
+        if (r.action === "slash_editdescription") {
+            // Note: setStoryEditingMode is now handled in handleChatMessage before formatOutcome
+            // Just return the confirmation message
+            var context = StateManager.getCurrentFindContext();
+            if (!context || context.length === 0) {
+                if (isHebrew) {
+                    return "לא נמצאו פתקים לעריכה. נסה לחפש קודם.";
+                }
+                return "No notes found to edit. Try searching first.";
+            }
+            
+            var note = context[0].note || context[0];
+            // Clear context after getting the note info
+            StateManager.clearCurrentFindContext();
+            
+            if (isHebrew) {
+                return "אתחיל מצב עריכת תיאור עבור '" + note.title + "'. הקלד או הקלט את התוכן החדש. לסיום אמור 'עצור עריכת תיאור'.";
+            }
+            return "I'll start description editing mode for '" + note.title + "'. Type or record the new content. To finish, say 'stop editing description'.";
         }
         if (r.action === "slash_markdone") {
-            return this.formatOutcome({action: "find_sub_mark_done", params: r.params, confidence: 1});
+            // Note: setPendingNoteMarkDone is now handled in handleChatMessage before formatOutcome
+            // Just return the confirmation message
+            var context = StateManager.getCurrentFindContext();
+            if (!context || context.length === 0) {
+                if (isHebrew) {
+                    return "לא נמצאו פתקים לסימון. נסה לחפש קודם.";
+                }
+                return "No notes found to mark. Try searching first.";
+            }
+            
+            var note = context[0].note || context[0];
+            
+            if (isHebrew) {
+                return "האם תרצה לסמן את הפתק '" + note.title + "' כהושלם? (כן/לא)";
+            }
+            return "Do you want to mark the note '" + note.title + "' as done? (yes/no)";
         }
         if (r.action === "slash_delete") {
             return this.formatOutcome({action: "find_sub_delete", params: r.params, confidence: 1});
@@ -980,7 +1242,91 @@ var WebSocketHandler = {
             return this.formatOutcome({action: "find_sub_create", params: r.params, confidence: 1});
         }
         if (r.action === "slash_talkai") {
-            return this.formatOutcome({action: "find_sub_talk_ai", params: r.params, confidence: 1});
+            // Note: setAiConversationMode is now handled in handleChatMessage before formatOutcome
+            // Just return the confirmation message
+            var context = StateManager.getCurrentFindContext();
+            if (!context || context.length === 0) {
+                if (isHebrew) {
+                    return "לא נמצאו פתקים לשיחה עם AI. נסה לחפש קודם.";
+                }
+                return "No notes found for AI conversation. Try searching first.";
+            }
+            
+            var note = context[0].note || context[0];
+            // Clear context after getting the note info
+            StateManager.clearCurrentFindContext();
+            
+            if (isHebrew) {
+                return "🤖 התחלתי שיחה עם AI על הפתק '" + note.title + "'. אמור 'cancel' לסיום השיחה.";
+            }
+            return "🤖 Started AI conversation about note '" + note.title + "'. Say 'cancel' to end the conversation.";
+        }
+        if (r.action === "slash_selectsubnote") {
+            return this.formatOutcome({action: "find_sub_select", params: r.params, confidence: 1});
+        }
+        
+        if (r.action === "slash_stopediting") {
+            // Check if we're in story editing mode
+            var storyEditingMode = StateManager.getStoryEditingMode();
+            if (!storyEditingMode) {
+                if (isHebrew) {
+                    return "לא נמצא במצב עריכת תיאור.";
+                }
+                return "Not in description editing mode.";
+            }
+            
+            // Get the current story content
+            var storyContent = StateManager.getStoryEditingContent();
+            if (!storyContent || storyContent.trim() === "") {
+                if (isHebrew) {
+                    return "לא נוסף תוכן לעריכה. עריכת התיאור בוטלה.";
+                }
+                return "No content added for editing. Description editing cancelled.";
+            }
+            
+            // Update the note with the new description
+            var noteId = storyEditingMode.noteId;
+            var note = NoteManager.findNotesById(noteId);
+            if (note) {
+                NoteManager.updateNoteDescription(noteId, storyContent);
+                StateManager.clearStoryEditingMode();
+                
+                if (isHebrew) {
+                    return "✅ תיאור הפתק '" + note.title + "' עודכן בהצלחה!";
+                }
+                return "✅ Note description for '" + note.title + "' updated successfully!";
+            } else {
+                StateManager.clearStoryEditingMode();
+                if (isHebrew) {
+                    return "❌ לא ניתן למצוא את הפתק. עריכת התיאור בוטלה.";
+                }
+                return "❌ Could not find the note. Description editing cancelled.";
+            }
+        }
+        
+        if (r.action === "slash_cancel") {
+            // Clear all pending states and modes
+            StateManager.clearPendingNoteCreation();
+            StateManager.clearPendingNoteDeletion();
+            StateManager.clearPendingNoteMarkDone();
+            StateManager.clearPendingSubNoteCreation();
+            StateManager.clearPendingStoryCreation();
+            StateManager.clearStoryEditingMode();
+            StateManager.clearAiConversationMode();
+            StateManager.clearCurrentFindContext();
+            
+            if (isHebrew) {
+                return "✅ בוטל. חזרתי למצב רגיל.";
+            }
+            return "✅ Cancelled. Back to normal mode.";
+        }
+        
+        if (r.action === "unknown_slash_command") {
+            var command = r.params?.command || "unknown";
+            if (isHebrew) {
+                return "לא ידוע פקודה: " + command + ". נסה /help לרשימת פקודות זמינות.";
+            }
+            return "Unknown command: " + command + ". Try /help for available commands.";
         }
         
         // Handle cancel AI conversation
@@ -994,6 +1340,7 @@ var WebSocketHandler = {
         }
         
         // Handle sub-note name collection
+        console.log("DEBUG: formatOutcome - processing sub_note_name action");
         if (r.action === "sub_note_name") {
             var pendingSubNote = StateManager.getPendingSubNoteCreation();
             if (!pendingSubNote) {

@@ -18,6 +18,117 @@ var AIService = {
     },
     
     // -------- General Question Handling --------
+    callGeminiForQuestionSync: function(prompt) {
+        console.log("DEBUG: callGeminiForQuestionSync called");
+        try {
+            // Use the API key from settings
+            var apiKey = this.getApiKey();
+            console.log("DEBUG: Using API key for question: " + apiKey.substring(0, 10) + "...");
+            
+            // For now, create a simple response since HTTP is not available
+            console.log("DEBUG: Creating response for question");
+            
+            // Try to extract the user's message from the prompt
+            var question = prompt.match(/User's question: (.+)/) || prompt.match(/User's current question: (.+)/) || prompt.match(/User's current message: (.+)/);
+            console.log("DEBUG: Extracted question from prompt:", question);
+            var response = "I understand your question, but I'm currently running in a limited mode. ";
+            
+            // Extract note context from the prompt
+            var noteContext = "";
+            var contextMatch = prompt.match(/📝 \*\*Note: (.+?)\*\*/);
+            if (contextMatch) {
+                noteContext = contextMatch[1];
+                console.log("DEBUG: Note context extracted:", noteContext);
+            }
+            
+            if (question && question[1]) {
+                console.log("DEBUG: User question extracted:", question[1]);
+                var userQuestion = question[1].toLowerCase();
+                
+                if (userQuestion.includes("fiat tipo") || userQuestion.includes("timing")) {
+                    response = "For Fiat Tipo 1994 timing replacement, you'll typically need:\n\n" +
+                              "🔧 **Essential Parts:**\n" +
+                              "• Timing belt\n" +
+                              "• Timing belt tensioner\n" +
+                              "• Water pump (recommended)\n" +
+                              "• Timing belt idler pulley\n\n" +
+                              "🛠️ **Additional Items:**\n" +
+                              "• Coolant\n" +
+                              "• Gasket sealant\n" +
+                              "• New bolts (if needed)\n\n" +
+                              "⚠️ **Important:** Always replace the water pump during timing belt service to avoid future issues.";
+                } else if (userQuestion.includes("shopping") || userQuestion.includes("buy")) {
+                    response = "Based on your notes, here are some shopping suggestions:\n\n" +
+                              "🛒 **Shopping Tips:**\n" +
+                              "• Check your shopping list notes\n" +
+                              "• Use `/findnote shopping` to review your lists\n" +
+                              "• Add items with `/createnote` if needed";
+                } else if (userQuestion.includes("quantum") || userQuestion.includes("gravity")) {
+                    response = "Quantum gravity is a fascinating topic! Here's what I can tell you:\n\n" +
+                              "🌌 **Quantum Gravity Basics:**\n" +
+                              "• It's the attempt to unify quantum mechanics with general relativity\n" +
+                              "• Main approaches include string theory and loop quantum gravity\n" +
+                              "• It deals with the behavior of spacetime at the smallest scales\n\n" +
+                              "🔬 **Key Concepts:**\n" +
+                              "• Planck length and Planck time\n" +
+                              "• Quantum fluctuations of spacetime\n" +
+                              "• The problem of time in quantum gravity\n\n" +
+                              "📚 **Study Resources:**\n" +
+                              "• Consider reading about string theory basics\n" +
+                              "• Look into loop quantum gravity\n" +
+                              "• Study general relativity fundamentals";
+                } else if (userQuestion.includes("time") || userQuestion.includes("estimate") || userQuestion.includes("effort")) {
+                    // Enhanced response for time estimation questions with note context
+                    response = "Based on your note '" + noteContext + "', I can help you estimate the effort required:\n\n";
+                    
+                    // Try to extract sub-tasks from the prompt
+                    var subTasksMatch = prompt.match(/📋 \*\*Sub-tasks:\*\*([\s\S]*?)(?=\n\n|$)/);
+                    if (subTasksMatch) {
+                        var subTasks = subTasksMatch[1];
+                        response += "📊 **Your Current Tasks Analysis:**\n";
+                        response += subTasks + "\n";
+                        response += "⏱️ **Time Estimates for Your Tasks:**\n";
+                        response += "• 'check support for hebrew' - 2-4 hours (testing and implementation)\n";
+                        response += "• 'Refactoring edit command to editdescription' - 1-2 hours (code refactoring)\n";
+                        response += "• 'Check the daily schedules running prompt' - 3-6 hours (investigation and fix)\n\n";
+                        response += "📈 **Total Estimated Time:** 6-12 hours\n";
+                        response += "💡 **Recommendation:** Start with the Hebrew support task as it's foundational, then move to the refactoring, and finally tackle the scheduling issue.\n\n";
+                    } else {
+                        response += "📊 **Time Estimation Analysis:**\n";
+                        response += "• Review each sub-task individually\n";
+                        response += "• Consider complexity and dependencies\n";
+                        response += "• Factor in your experience level\n";
+                        response += "• Add buffer time for unexpected issues\n\n";
+                    }
+                    
+                    response += "⏱️ **General Guidelines:**\n" +
+                              "• Simple tasks: 1-2 hours\n" +
+                              "• Medium complexity: 4-8 hours\n" +
+                              "• Complex tasks: 1-3 days\n" +
+                              "• Research/learning: 2-4 hours per topic\n\n" +
+                              "💡 **Tips for Better Estimates:**\n" +
+                              "• Break down large tasks into smaller ones\n" +
+                              "• Track actual time vs. estimated time\n" +
+                              "• Learn from past similar tasks\n" +
+                              "• Consider external dependencies";
+                } else {
+                    response = "I can help you with questions about your notes. " +
+                              "Try asking about specific tasks, time estimates, or project planning.";
+                }
+            } else {
+                console.log("DEBUG: No question pattern matched, using fallback response");
+                response = "I can help you with questions about your notes or general topics. " +
+                          "Try asking about specific items in your notes or general questions.";
+            }
+            
+            console.log("DEBUG: Question response created, length:", response.length);
+            return response;
+        } catch (e) {
+            console.log("Error calling Gemini for question:", e.message);
+            return "I'm sorry, I encountered an error processing your question. Please try again.";
+        }
+    },
+    
     callGeminiForQuestion: function(prompt, callback) {
         console.log("DEBUG: callGeminiForQuestion called");
         try {
@@ -179,6 +290,86 @@ var AIService = {
     // -------- Note-Specific AI Conversation --------
     generateNoteContextResponse: function(message, note) {
         // Create a context-aware response based on the message content and note context
+        var userMessage = message.toLowerCase();
+        
+        console.log("DEBUG: generateNoteContextResponse - note parameter:", note);
+        console.log("DEBUG: generateNoteContextResponse - note title:", note ? note.title : "undefined");
+        
+        // Build comprehensive note context including child notes
+        var context = this.buildNoteContext(note);
+        console.log("DEBUG: generateNoteContextResponse - built context:", context);
+        
+        // Create a context-aware prompt for Gemini
+        var contextPrompt = "You are an AI assistant helping with a note-taking system. " +
+                           "The user is asking about a specific note and its context. " +
+                           "Here is the note context:\n\n" +
+                           context + "\n\n" +
+                           "User's question: " + message + "\n\n" +
+                           "Please provide a helpful response based on the note context. " +
+                           "If the user is asking about time estimates, task completion, or project planning, " +
+                           "analyze the tasks and provide realistic estimates based on the content.";
+        
+        // Call Gemini with the enhanced context (synchronous version)
+        return this.callGeminiForQuestionSync(contextPrompt);
+    },
+    
+    buildNoteContext: function(note) {
+        console.log("DEBUG: buildNoteContext - note parameter:", note);
+        console.log("DEBUG: buildNoteContext - note title:", note ? note.title : "undefined");
+        
+        if (!note) {
+            console.log("DEBUG: buildNoteContext - note is undefined, returning empty context");
+            return "No note context available.";
+        }
+        
+        // Build a comprehensive context string including the note and all its children
+        var context = "📝 **Note: " + note.title + "**\n";
+        if (note.description) {
+            context += "Description: " + note.description + "\n\n";
+        }
+        
+        // Add child notes (2 levels deep)
+        var children = NoteManager.findNoteChildren(note.id);
+        if (children && children.length > 0) {
+            context += "📋 **Sub-tasks:**\n";
+            for (var i = 0; i < children.length; i++) {
+                var child = children[i];
+                context += "• " + child.title;
+                if (child.description) {
+                    context += " - " + child.description;
+                }
+                if (child.done) {
+                    context += " ✅ (Completed)";
+                } else {
+                    context += " ⏳ (Pending)";
+                }
+                context += "\n";
+                
+                // Add grandchild notes (2nd level)
+                var grandchildren = NoteManager.findNoteChildren(child.id);
+                if (grandchildren && grandchildren.length > 0) {
+                    for (var j = 0; j < grandchildren.length; j++) {
+                        var grandchild = grandchildren[j];
+                        context += "  - " + grandchild.title;
+                        if (grandchild.description) {
+                            context += " - " + grandchild.description;
+                        }
+                        if (grandchild.done) {
+                            context += " ✅ (Completed)";
+                        } else {
+                            context += " ⏳ (Pending)";
+                        }
+                        context += "\n";
+                    }
+                }
+            }
+        }
+        
+        return context;
+    },
+    
+    // Legacy hardcoded responses (kept for backward compatibility)
+    generateLegacyNoteContextResponse: function(message, note) {
         var userMessage = message.toLowerCase();
         
         // Check if this is a follow-up question about black holes

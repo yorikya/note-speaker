@@ -45,17 +45,21 @@ var CommandRouter = {
             ],
             slash_help: [ /^\/help$/i, /^\/h$/i ],  // Short form
             
-            // Find sub-commands as slash commands
-            slash_edit: [ /^\/edit$/i, /^\/editdescription$/i ],
-            slash_markdone: [ /^\/markdone$/i, /^\/mark_done$/i, /^\/done$/i ],
-            slash_delete: [ /^\/delete$/i, /^\/remove$/i, /^\/rm$/i ],
-            slash_createsub: [ /^\/createsub$/i, /^\/createsubnote$/i, /^\/subnote$/i ],
-            slash_talkai: [ /^\/talkai$/i, /^\/talk_ai$/i, /^\/ai$/i ],
+            // Slash commands are now handled by prefix matching above
+            // These patterns are kept for backward compatibility but not used
+            slash_editdescription: [],
+            slash_markdone: [],
+            slash_delete: [],
+            slash_createsub: [],
+            slash_talkai: [],
+            slash_selectsubnote: [],
+        slash_stopediting: [],
+        slash_cancel: [],
             
             // Sub-commands for find flow
             // Free text sub-commands removed - only slash commands supported
             // Sub-note name collection - match simple text that's not a command
-            sub_note_name:    [ /^(?!.*\b(create|new|make|add|edit|update|delete|remove|find|search|lookup)\b)[a-zA-Z0-9\s]+$/i ],
+            sub_note_name:    [ /^(?!.*\b(create|new|make|add|editdescription|update|delete|remove|find|search|lookup)\b)[a-zA-Z0-9\s]+$/i ],
             // Note selection by ID or exact title
             note_selection:    [ /^(?:note\s+)?id\s+(\d+)$/i, /^(?:note\s+)?(\d+)$/i, /^['"]([^'"]+)['"]$/ ],
             // Stop editing description - fuzzy matching for typos
@@ -157,6 +161,15 @@ var CommandRouter = {
                 return { hasParameter: false };
             }
             
+            if (action === "slash_selectsubnote") {
+                // Extract sub-note ID from slash command
+                var match = raw.match(/^\/\w+[\-_]?\w*\s+(\d+)/i);
+                if (match && match[1]) {
+                    return { subNoteId: match[1], hasParameter: true };
+                }
+                return { subNoteId: null, hasParameter: false };
+            }
+            
             // Free text create_note command removed - only slash commands supported
             
             // Free text create_note_story command removed - only slash commands supported
@@ -224,12 +237,15 @@ var CommandRouter = {
         }
         
         // Check if we're in story editing mode
-        if (StateManager.getStoryEditingMode()) {
+        var storyEditingMode = StateManager.getStoryEditingMode();
+        console.log("DEBUG: detectIntent - storyEditingMode:", storyEditingMode);
+        if (storyEditingMode) {
             // Check for stop editing description command
             if (table["stop_editing_description"] && table["stop_editing_description"].some(rx => rx.test(text))) {
                 return {action: "stop_editing_description", params: {}, confidence: 1};
             }
             // If in story editing mode and not a stop command, treat as story content
+            console.log("DEBUG: detectIntent - treating as story content:", text.trim());
             return {action: "story_content", params: {content: text.trim()}, confidence: 1};
         }
         
@@ -256,7 +272,9 @@ var CommandRouter = {
         }
         
         // Check if we're waiting for sub-note name
-        if (StateManager.getPendingSubNoteCreation()) {
+        var pendingSubNote = StateManager.getPendingSubNoteCreation();
+        console.log("DEBUG: detectIntent - pendingSubNote:", pendingSubNote);
+        if (pendingSubNote) {
             // First check for yes/no responses (confirmation) - these should NOT be treated as sub-note names
             var isHebrew = (lang === "he");
             var lowerText = text.toLowerCase().trim();
@@ -288,6 +306,7 @@ var CommandRouter = {
             
             // If we're waiting for a sub-note name, treat ANY text as a sub-note name
             // (unless it's a yes/no response which we already handled above)
+            console.log("DEBUG: detectIntent - treating as sub-note name:", text.trim());
             return {action: "sub_note_name", params: {name: text.trim()}, confidence: 1};
         }
         
@@ -309,9 +328,44 @@ var CommandRouter = {
             // Free text sub-commands removed - only slash commands supported
         }
         
-        // Main command order - prioritize slash commands
-        var slashOrder = ["slash_create_note", "slash_create_story", "slash_find_note", "slash_find_by_id", "slash_show_parents", "slash_help", "slash_edit", "slash_markdone", "slash_delete", "slash_createsub", "slash_talkai"];
-        for (var a of slashOrder) for (var rx of (table[a]||[])) if (rx.test(text)) return {action:a, params:this.extractParams(a,text), confidence:1};
+        // Simple prefix-based command detection
+        if (text.startsWith('/')) {
+            var parts = text.trim().split(/\s+/);
+            var command = parts[0].toLowerCase();
+            var params = parts.slice(1).join(' ');
+            
+            console.log("DEBUG: Slash command detected:", command, "with params:", params);
+            
+            // Map command prefixes to actions
+                var commandMap = {
+                    '/createnote': 'slash_create_note',
+                    '/createstory': 'slash_create_story', 
+                    '/findnote': 'slash_find_note',
+                    '/findbyid': 'slash_find_by_id',
+                    '/showparents': 'slash_show_parents',
+                    '/help': 'slash_help',
+                    '/editdescription': 'slash_editdescription',
+                    '/editdesc': 'slash_editdescription',
+                    '/markdone': 'slash_markdone',
+                    '/delete': 'slash_delete',
+                    '/createsub': 'slash_createsub',
+                    '/talkai': 'slash_talkai',
+                    '/selectsubnote': 'slash_selectsubnote',
+                    '/selectsub': 'slash_selectsubnote',
+                    '/sub': 'slash_selectsubnote',
+                    '/stopediting': 'slash_stopediting',
+                    '/cancel': 'slash_cancel'
+                };
+            
+            var action = commandMap[command];
+            if (action) {
+                console.log("DEBUG: Command mapped to action:", action);
+                return {action: action, params: this.extractParams(action, text), confidence: 1};
+            } else {
+                console.log("DEBUG: Unknown slash command:", command);
+                return {action: "unknown_slash_command", params: {command: command}, confidence: 0.8};
+            }
+        }
         
         // If no command matched, treat as free text question for Gemini
         return {action:"gemini_question", params:{question: text}, confidence:0.5};
@@ -326,7 +380,7 @@ var CommandRouter = {
     isCommand: function(text) {
         var commandPatterns = [
             /^\/\w+/i, // Slash commands
-            /^(create|find|show|help|edit|delete|mark|talk|stop|cancel|yes|no)\b/i,
+            /^(create|find|show|help|editdescription|delete|mark|talk|stop|cancel|yes|no)\b/i,
             /^(צור|מצא|הצג|עזרה|ערוך|מחק|סמן|דבר|עצור|בטל|כן|לא)\b/i
         ];
         return commandPatterns.some(pattern => pattern.test(text));

@@ -73,7 +73,7 @@
       <option>gemini-1.5-pro</option>
     </select>
   </div>
-  <p class="warn" id="tipSection">Tip: Try compact commands like <code>/createnote groceries</code> or <code>/findnote groceries</code>. For editing: <code>/findnote groceries</code> then <code>edit</code>. To see all notes: <code>/showparents</code>. Speech works via the browser's Web Speech API. Gemini here is for **testing only**—your key is exposed.</p>
+  <p class="warn" id="tipSection">Tip: Try compact commands like <code>/createnote groceries</code> or <code>/findnote groceries</code>. For editing: <code>/findnote groceries</code> then <code>/editdescription</code>. To see all notes: <code>/showparents</code>. Speech works via the browser's Web Speech API. Gemini here is for **testing only**—your key is exposed.</p>
 
   <div id="log"></div>
 
@@ -169,8 +169,7 @@ const commandsOverlay = document.getElementById("commandsOverlay");
 const closeCommands = document.getElementById("closeCommands");
 const commandsContent = document.getElementById("commandsContent");
 
-// Track current mode for dynamic commands
-let currentMode = 'main'; // main, find_context, story_editing, pending_creation, etc.
+// Backend now handles all context detection
 
 // Dynamic commands cache
 let availableCommands = [];
@@ -243,7 +242,17 @@ function generateDynamicCommands() {
     html += `<h4>${category}</h4>`;
     categories[category].forEach(cmd => {
       const commandText = cmd.requiresParam ? cmd.command + ' ' : cmd.command;
-      html += `<button class="command-btn" data-command="${commandText}">${cmd.command}</button>`;
+      let buttonText = cmd.command;
+      
+      console.log("DEBUG: Generating command:", cmd.command, "commandText:", commandText, "requiresParam:", cmd.requiresParam);
+      
+      // Add examples for commands that need parameters
+      if (cmd.requiresParam && cmd.examples && cmd.examples.length > 0) {
+        const example = cmd.examples[0];
+        buttonText += ` <span style="opacity: 0.7; font-size: 0.9em;">(${example})</span>`;
+      }
+      
+      html += `<button class="command-btn" data-command="${commandText}">${buttonText}</button>`;
     });
     html += `</div>`;
   }
@@ -251,28 +260,24 @@ function generateDynamicCommands() {
   return html;
 }
 
-// Function to update mode based on backend messages
+// Function to update mode based on backend messages (simplified - backend handles context)
 function updateModeFromMessage(message) {
-  if (message.includes("What would you like to do?") || message.includes("מה תרצה לעשות?")) {
-    currentMode = 'find_context';
-  } else if (message.includes("To start editing") || message.includes("כדי להתחיל לערוך")) {
-    currentMode = 'story_editing';
-  } else if (message.includes("Started AI conversation") || message.includes("התחלתי שיחה עם AI")) {
-    currentMode = 'ai_conversation';
-  } else if (message.includes("AI conversation cancelled") || message.includes("שיחה עם AI בוטלה")) {
-    currentMode = 'main';
-  } else if (message.includes("Do you want to create") || message.includes("האם תרצה ליצור") || 
-             message.includes("Do you want to delete") || message.includes("האם תרצה למחוק") ||
-             message.includes("Do you want to mark") || message.includes("האם תרצה לסמן")) {
-    currentMode = 'pending_creation';
-  } else if (message.includes("Which note would you like to select") || message.includes("איזה פתק תרצה לבחור")) {
-    currentMode = 'note_selection';
-  } else if (message.includes("updated successfully") || message.includes("עודכן בהצלחה") ||
-             message.includes("created successfully") || message.includes("נוצר בהצלחה") ||
-             message.includes("deleted successfully") || message.includes("נמחק בהצלחה")) {
-    currentMode = 'main';
-  } else if (message.includes("cancelled") || message.includes("בוטל")) {
-    currentMode = 'main';
+  // Backend now handles all context detection, so we just need to trigger command refresh
+  if (message.includes("What would you like to do?") || message.includes("מה תרצה לעשות?") ||
+      message.includes("To start editing") || message.includes("כדי להתחיל לערוך") ||
+      message.includes("Started AI conversation") || message.includes("התחלתי שיחה עם AI") ||
+      message.includes("AI conversation cancelled") || message.includes("שיחה עם AI בוטלה") ||
+      message.includes("Do you want to create") || message.includes("האם תרצה ליצור") || 
+      message.includes("Do you want to delete") || message.includes("האם תרצה למחוק") ||
+      message.includes("Do you want to mark") || message.includes("האם תרצה לסמן") ||
+      message.includes("Which note would you like to select") || message.includes("איזה פתק תרצה לבחור") ||
+      message.includes("updated successfully") || message.includes("עודכן בהצלחה") ||
+      message.includes("created successfully") || message.includes("נוצר בהצלחה") ||
+      message.includes("deleted successfully") || message.includes("נמחק בהצלחה") ||
+      message.includes("cancelled") || message.includes("בוטל")) {
+    
+    // Request updated commands from backend
+    loadAvailableCommands();
   }
 }
 
@@ -283,7 +288,7 @@ langSel.onchange = () => {
 clearBtn.onclick = () => { logEl.innerHTML = ""; };
 
 /* ---------- Commands Popup Functionality ---------- */
-// Function to populate commands based on current mode
+// Function to populate commands based on backend context
 function populateCommands() {
   commandsContent.innerHTML = '';
   
@@ -302,109 +307,15 @@ function populateCommands() {
     commandsContent.innerHTML += historyHtml;
   }
   
-  if (currentMode === 'main') {
-    // Main mode - show dynamic commands from backend
-    if (commandsLoaded && availableCommands.length > 0) {
-      commandsContent.innerHTML += generateDynamicCommands();
-    } else {
-      // Fallback to static commands if dynamic loading failed
-      commandsContent.innerHTML += `
-        <div class="command-category">
-          <h4>📝 Create</h4>
-          <button class="command-btn" data-command="/createnote ">/createnote</button>
-          <button class="command-btn" data-command="/createstory ">/createstory</button>
-        </div>
-        <div class="command-category">
-          <h4>🔍 Find</h4>
-          <button class="command-btn" data-command="/findnote ">/findnote</button>
-          <button class="command-btn" data-command="/findbyid ">/findbyid</button>
-        </div>
-        <div class="command-category">
-          <h4>📋 Show</h4>
-          <button class="command-btn" data-command="/showparents">/showparents</button>
-        </div>
-        <div class="command-category">
-          <h4>❓ Help</h4>
-          <button class="command-btn" data-command="/help">/help</button>
-        </div>
-      `;
-    }
-  } else if (currentMode === 'find_context') {
-    // Find context - show sub-commands for found note
+  // Use backend commands exclusively
+  if (commandsLoaded && availableCommands.length > 0) {
+    commandsContent.innerHTML += generateDynamicCommands();
+  } else {
+    // Fallback message if no commands available
     commandsContent.innerHTML += `
       <div class="command-category">
-        <h4>✏️ Actions</h4>
-        <button class="command-btn" data-command="/edit">/edit</button>
-        <button class="command-btn" data-command="/markdone">/markdone</button>
-        <button class="command-btn" data-command="/delete">/delete</button>
-        <button class="command-btn" data-command="/createsub">/createsub</button>
-      </div>
-      <div class="command-category">
-        <h4>🤖 AI Assistant</h4>
-        <button class="command-btn" data-command="/talkai">/talkai</button>
-      </div>
-      <div class="command-category">
-        <h4>❓ Help</h4>
-        <button class="command-btn" data-command="/help">/help</button>
-      </div>
-      <div class="command-category">
-        <h4>🚫 Cancel</h4>
-        <button class="command-btn" data-command="cancel">Cancel action</button>
-      </div>
-    `;
-  } else if (currentMode === 'story_editing') {
-    // Story editing mode - show story-specific commands
-    commandsContent.innerHTML += `
-      <div class="command-category">
-        <h4>📖 Story Mode</h4>
-        <button class="command-btn" data-command="stop editing description">Stop editing</button>
-      </div>
-      <div class="command-category">
-        <h4>❓ Help</h4>
-        <button class="command-btn" data-command="/help">/help</button>
-      </div>
-      <div class="command-category">
-        <h4>🚫 Cancel</h4>
-        <button class="command-btn" data-command="cancel">Cancel editing</button>
-      </div>
-    `;
-  } else if (currentMode === 'ai_conversation') {
-    // AI conversation mode - show conversation commands
-    commandsContent.innerHTML += `
-      <div class="command-category">
-        <h4>🤖 AI Conversation</h4>
-        <button class="command-btn" data-command="cancel">End conversation</button>
-      </div>
-      <div class="command-category">
-        <h4>❓ Help</h4>
-        <button class="command-btn" data-command="/help">/help</button>
-      </div>
-    `;
-  } else if (currentMode === 'pending_creation') {
-    // Pending creation - show confirmation commands
-    commandsContent.innerHTML += `
-      <div class="command-category">
-        <h4>✅ Confirm</h4>
-        <button class="command-btn" data-command="yes">Yes</button>
-        <button class="command-btn" data-command="no">No</button>
-      </div>
-      <div class="command-category">
-        <h4>🚫 Cancel</h4>
-        <button class="command-btn" data-command="cancel">Cancel</button>
-      </div>
-    `;
-  } else if (currentMode === 'note_selection') {
-    // Note selection from multiple results
-    commandsContent.innerHTML += `
-      <div class="command-category">
-        <h4>🔢 Select</h4>
-        <button class="command-btn" data-command="1">Select 1</button>
-        <button class="command-btn" data-command="2">Select 2</button>
-        <button class="command-btn" data-command="3">Select 3</button>
-      </div>
-      <div class="command-category">
-        <h4>🚫 Cancel</h4>
-        <button class="command-btn" data-command="cancel">Cancel</button>
+        <h4>❌ No commands available</h4>
+        <p>Loading commands from backend...</p>
       </div>
     `;
   }
@@ -430,9 +341,11 @@ commandsOverlay.onclick = () => {
 document.addEventListener('click', (e) => {
   if (e.target.classList.contains('command-btn')) {
     const command = e.target.getAttribute('data-command');
+    console.log("DEBUG: Command button clicked:", command);
     if (command) {
       // Add the command to the input field with whitespace at the end
-      inputEl.value = command + ' ';
+      inputEl.value = command;
+      console.log("DEBUG: Set input value to:", inputEl.value);
       // Add to command history
       addToCommandHistory(command);
       // Close the popup
@@ -611,6 +524,11 @@ function connect(){
         availableCommands = msg.commands || [];
         commandsLoaded = true;
         console.log("Loaded dynamic commands:", availableCommands);
+        console.log("DEBUG: Available commands count:", availableCommands.length);
+        // Log each command for debugging
+        availableCommands.forEach(cmd => {
+          console.log("DEBUG: Command:", cmd.command, "requiresParam:", cmd.requiresParam, "category:", cmd.category);
+        });
       }
       else addMsg(ev.data,'sys'); 
     }
@@ -670,8 +588,8 @@ formEl.addEventListener("submit", async (e) => {
 function isCommand(text) {
   const commandPatterns = [
     /^\/\w+/i, // Slash commands
-    /^(create|find|show|help|edit|delete|mark|talk|stop|cancel|yes|no)\b/i,
-    /^(צור|מצא|הצג|עזרה|ערוך|מחק|סמן|דבר|עצור|בטל|כן|לא)\b/i
+    /^(create|find|show|help|edit|delete|mark|talk|stop|yes|no)\b/i,
+    /^(צור|מצא|הצג|עזרה|ערוך|מחק|סמן|דבר|עצור|כן|לא)\b/i
   ];
   return commandPatterns.some(pattern => pattern.test(text));
 }
