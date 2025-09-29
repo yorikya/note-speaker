@@ -5,56 +5,8 @@ var CommandRouter = {
     // -------- Command Patterns --------
     patterns: {
         en: {
-            // Slash-based commands (new system) - supporting multiple naming conventions
-            slash_create_note: [ 
-                /^\/create_note\s+(.+)/i, /^\/create-note\s+(.+)/i, /^\/createNote\s+(.+)/i,
-                /^\/createnote\s+(.+)/i, /^\/createnotes\s+(.+)/i,
-                /^\/create\s+(.+)/i,  // Short form with parameter
-                /^\/create_note$/i, /^\/create-note$/i, /^\/createNote$/i,
-                /^\/createnote$/i, /^\/createnotes$/i,
-                /^\/create$/i  // Short form without parameter
-            ],
-            slash_create_story: [ 
-                /^\/create_story\s+(.+)/i, /^\/create-story\s+(.+)/i, /^\/createStory\s+(.+)/i,
-                /^\/createstory\s+(.+)/i, /^\/createstories\s+(.+)/i,
-                /^\/story\s+(.+)/i,  // Short form with parameter
-                /^\/create_story$/i, /^\/create-story$/i, /^\/createStory$/i,
-                /^\/createstory$/i, /^\/createstories$/i,
-                /^\/story$/i  // Short form without parameter
-            ],
-            slash_find_note: [ 
-                /^\/find_note\s+(.+)/i, /^\/find-note\s+(.+)/i, /^\/findNote\s+(.+)/i,
-                /^\/findnote\s+(.+)/i, /^\/findnotes\s+(.+)/i,
-                /^\/find\s+(.+)/i,  // Short form with parameter
-                /^\/find_note$/i, /^\/find-note$/i, /^\/findNote$/i,
-                /^\/findnote$/i, /^\/findnotes$/i,
-                /^\/find$/i  // Short form without parameter
-            ],
-            slash_find_by_id: [ 
-                /^\/find_by_id\s+(\d+)/i, /^\/find-by-id\s+(\d+)/i, /^\/findById\s+(\d+)/i,
-                /^\/findbyid\s+(\d+)/i, /^\/findid\s+(\d+)/i,
-                /^\/id\s+(\d+)/i,  // Short form with parameter
-                /^\/find_by_id$/i, /^\/find-by-id$/i, /^\/findById$/i,
-                /^\/findbyid$/i, /^\/findid$/i,
-                /^\/id$/i  // Short form without parameter
-            ],
-            slash_show_parents: [ 
-                /^\/show_parents$/i, /^\/show-parents$/i, /^\/showParents$/i,
-                /^\/showparents$/i, /^\/showparent$/i,
-                /^\/parents$/i, /^\/parent$/i  // Short forms
-            ],
-            slash_help: [ /^\/help$/i, /^\/h$/i ],  // Short form
+            // Only patterns still used by the detection system
             
-            // Slash commands are now handled by prefix matching above
-            // These patterns are kept for backward compatibility but not used
-            slash_editdescription: [],
-            slash_markdone: [],
-            slash_delete: [],
-            slash_createsub: [],
-            slash_talkai: [],
-            slash_selectsubnote: [],
-        slash_stopediting: [],
-        slash_cancel: [],
             
             // Sub-commands for find flow
             // Free text sub-commands removed - only slash commands supported
@@ -74,9 +26,7 @@ var CommandRouter = {
             show_parent_notes: [ /\b(show|list|display)\s+(parent|main|root)\s+(notes|note)\b/i, /\b(parent|main|root)\s+(notes|note)\b/i, /\b(show|list|display)\s+(all\s+)?(notes|note)\b/i ],
         },
         he: {
-            // Free text commands removed - only slash commands supported
-            // Sub-commands for find flow
-            // Free text sub-commands removed - only slash commands supported
+            // Hebrew pattern equivalent of English patterns
             // Sub-note name collection - match simple text that's not a command
             sub_note_name:    [ /^(?!.*\b(צור|יצירת|הוסף|ערוך|עדכן|מחק|מצא|חפש)\b)[א-ת0-9\s]+$/i ],
             // Note selection by ID or exact title
@@ -95,88 +45,46 @@ var CommandRouter = {
     },
     
     // -------- Pattern Management Functions --------
-    addPattern: function(lang, action, regex) {
-        if (!this.patterns[lang]) {
-            this.patterns[lang] = {};
-        }
-        if (!this.patterns[lang][action]) {
-            this.patterns[lang][action] = [];
-        }
-        this.patterns[lang][action].push(regex);
-    },
-    
     getPatterns: function(lang) {
         return this.patterns[lang] || {};
     },
     
     // -------- Parameter Extraction Functions --------
-    extractQuoted: function(s) {
-        var m = s.match(/'([^']+)'/);
-        return m ? m[1].trim() : null;
-    },
-    
-    extractParent: function(s) {
-        var m = s.match(/\bunder\s+'([^']+)'/i) || s.match(/\bתחת\s+'([^']+)'/i);
-        return m ? m[1].trim() : null;
-    },
     
     extractParams: function(action, raw) {
         console.log("DEBUG: extractParams called with action='" + action + "', raw='" + raw + "'");
         try {
-            var title = this.extractQuoted(raw);
-            var parent = this.extractParent(raw);
+            // Extract quoted text for title
+            var titleMatch = raw.match(/'([^']+)'/);
+            var title = titleMatch ? titleMatch[1].trim() : null;
+            
+            // Extract parent reference
+            var parentMatch = raw.match(/\bunder\s+'([^']+)'/i) || raw.match(/\bתחת\s+'([^']+)'/i);
+            var parent = parentMatch ? parentMatch[1].trim() : null;
+            
             var query = title || raw;
             console.log("DEBUG: extractParams - title='" + title + "', parent='" + parent + "', query='" + query + "'");
             
-            // Handle slash commands with improved pattern matching
-            if (action === "slash_create_note" || action === "slash_create_story") {
-                // Extract title from slash command - handle all formats
+            // Handle slash commands with parameter extraction
+            if (action.startsWith("slash_")) {
+                // Generic slash command parameter extraction
                 var match = raw.match(/^\/\w+[\-_]?\w*\s+(.+)/i);
                 if (match && match[1]) {
-                    return { title: match[1].trim(), hasParameter: true };
+                    var param = match[1].trim();
+                    
+                    // Specific handling for different command types
+                    if (action === "slash_selectsubnote") {
+                        return { subNoteId: param, hasParameter: true };
+                    } else if (action === "slash_find_note") {
+                        return { title: param, query: param, hasParameter: true };
+                    } else if (action === "slash_find_by_id") {
+                        return { query: param, hasParameter: true };
+                    } else {
+                        return { title: param, hasParameter: true };
+                    }
                 }
-                return { title: null, hasParameter: false };
-            }
-            
-            if (action === "slash_find_note") {
-                // Extract query from slash command - handle all formats
-                var match = raw.match(/^\/\w+[\-_]?\w*\s+(.+)/i);
-                if (match && match[1]) {
-                    return { title: match[1].trim(), query: match[1].trim(), hasParameter: true };
-                }
-                return { query: null, hasParameter: false };
-            }
-            
-            if (action === "slash_find_by_id") {
-                // Extract ID from slash command - handle all formats
-                var match = raw.match(/^\/\w+[\-_]?\w*\s+(\d+)/i);
-                if (match && match[1]) {
-                    return { query: match[1], hasParameter: true };
-                }
-                return { query: null, hasParameter: false };
-            }
-            
-            if (action === "slash_show_parents" || action === "slash_help") {
-                // No parameters needed
                 return { hasParameter: false };
             }
-            
-            if (action === "slash_selectsubnote") {
-                // Extract sub-note ID from slash command
-                var match = raw.match(/^\/\w+[\-_]?\w*\s+(\d+)/i);
-                if (match && match[1]) {
-                    return { subNoteId: match[1], hasParameter: true };
-                }
-                return { subNoteId: null, hasParameter: false };
-            }
-            
-            // Free text create_note command removed - only slash commands supported
-            
-            // Free text create_note_story command removed - only slash commands supported
-            
-            // Free text find_note_by_id command removed - only slash commands supported
-            
-            // Free text find_note command removed - only slash commands supported
             
             // For sub-commands, extract the action and any additional parameters
             if (action.startsWith("find_sub_")) {
@@ -376,22 +284,5 @@ var CommandRouter = {
         StateManager.setPendingCommandCompletion(command, action);
     },
     
-    // -------- Utility Functions --------
-    isCommand: function(text) {
-        var commandPatterns = [
-            /^\/\w+/i, // Slash commands
-            /^(create|find|show|help|editdescription|delete|mark|talk|stop|cancel|yes|no)\b/i,
-            /^(צור|מצא|הצג|עזרה|ערוך|מחק|סמן|דבר|עצור|בטל|כן|לא)\b/i
-        ];
-        return commandPatterns.some(pattern => pattern.test(text));
-    },
     
-    // -------- Debug Functions --------
-    getRouterInfo: function() {
-        return {
-            supportedLanguages: Object.keys(this.patterns),
-            totalPatterns: Object.keys(this.patterns.en || {}).length,
-            routerStatus: "active"
-        };
-    }
 };

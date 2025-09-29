@@ -269,16 +269,6 @@ var NoteManager = {
         return this.notesData;
     },
     
-    getParentNotes: function() {
-        var parentNotes = [];
-        for (var i = 0; i < this.notesData.notes.length; i++) {
-            var note = this.notesData.notes[i];
-            if (!note.deleted && !note.parent_id) {
-                parentNotes.push(note);
-            }
-        }
-        return parentNotes;
-    },
     
     getRecentNotes: function(hoursAgo) {
         var cutoffTime = new Date(Date.now() - (hoursAgo * 60 * 60 * 1000));
@@ -300,28 +290,5 @@ var NoteManager = {
     clearAllNotes: function() {
         this.notesData = { notes: [], last_note_id: 0 };
         this.saveNotes();
-    },
-    
-    getNoteById: function(noteId) {
-        for (var i = 0; i < this.notesData.notes.length; i++) {
-            if (this.notesData.notes[i].id === noteId) {
-                return this.notesData.notes[i];
-            }
-        }
-        return null;
-    },
-    
-    getNotesCount: function() {
-        return this.notesData.notes.length;
-    },
-    
-    getActiveNotesCount: function() {
-        var count = 0;
-        for (var i = 0; i < this.notesData.notes.length; i++) {
-            if (!this.notesData.notes[i].deleted) {
-                count++;
-            }
-        }
-        return count;
     }
 };

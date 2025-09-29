@@ -9,7 +9,7 @@ var DailySummary = {
     // -------- Alarm Management --------
     setupDailySummary: function() {
         // Fire twice daily (every 12 hours = 720 minutes), repeating
-        app.SetAlarm("sumerizeNotesDaily", this.summaryInterval, this.isRepeating);
+        app.SetAlarm("sumerizeNotesDaily", 5, this.isRepeating); //TODO: change to 720 minutes after testing
         console.log("Daily summary alarm set for every " + this.summaryInterval + " minutes");
     },
     

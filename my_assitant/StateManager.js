@@ -130,12 +130,6 @@ var StateManager = {
         this.pendingStoryCreation = null;
     },
     
-    updatePendingStoryDescription: function(additionalText) {
-        if (this.pendingStoryCreation) {
-            this.pendingStoryCreation.description += (this.pendingStoryCreation.description ? " " : "") + additionalText;
-        }
-    },
-    
     // -------- Story Editing Mode Functions --------
     setStoryEditingMode: function(noteId, noteTitle) {
         this.storyEditingMode = {
@@ -195,45 +189,5 @@ var StateManager = {
     
     clearPendingCommandCompletion: function() {
         this.pendingCommandCompletion = null;
-    },
-    
-    // -------- Settings Management --------
-    setLanguage: function(lang) {
-        this.settings.lang = lang;
-    },
-    
-    getLanguage: function() {
-        return this.settings.lang;
-    },
-    
-    // -------- Utility Functions --------
-    resetAllStates: function() {
-        this.clearCurrentFindContext();
-        this.clearAiConversationMode();
-        this.clearPendingNoteCreation();
-        this.clearPendingNoteDeletion();
-        this.clearPendingNoteMarkDone();
-        this.clearPendingSubNoteCreation();
-        this.clearPendingStoryCreation();
-        this.clearStoryEditingMode();
-        this.clearPendingStoryUpdate();
-        this.clearPendingCommandCompletion();
-    },
-    
-    // -------- State Debugging Functions --------
-    getStateSummary: function() {
-        return {
-            currentFindContext: this.currentFindContext ? this.currentFindContext.length + " notes" : "null",
-            // chatHistoryLength: removed - no general chat history
-            aiConversationMode: this.aiConversationMode,
-            pendingNoteCreation: this.pendingNoteCreation ? "pending" : "null",
-            pendingNoteDeletion: this.pendingNoteDeletion,
-            pendingNoteMarkDone: this.pendingNoteMarkDone,
-            pendingSubNoteCreation: this.pendingSubNoteCreation ? "pending" : "null",
-            pendingStoryCreation: this.pendingStoryCreation ? "pending" : "null",
-            storyEditingMode: this.storyEditingMode ? "active" : "null",
-            pendingStoryUpdate: this.pendingStoryUpdate ? "pending" : "null",
-            pendingCommandCompletion: this.pendingCommandCompletion ? "pending" : "null"
-        };
     }
 };

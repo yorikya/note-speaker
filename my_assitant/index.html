@@ -24,7 +24,6 @@
   @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
   .row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:8px 16px; }
   .warn { font-size:12px; opacity:.75; padding:0 16px; }
-  .hidden { display:none; }
   
   /* Side Menu Styles */
   .side-menu { position:fixed; top:0; left:-300px; width:300px; height:100vh; background:#1a1d21; border-right:1px solid #333; z-index:1000; transition:left 0.3s ease; }
@@ -66,13 +65,6 @@
     <button id="clear">Clear</button>
   </header>
 
-  <div class="row">
-    <input id="apiKey" class="hidden" type="text" placeholder="Paste Gemini API key (UNSAFE in browser)" style="min-width:280px;" />
-    <select id="model" class="hidden">
-      <option>gemini-1.5-flash</option>
-      <option>gemini-1.5-pro</option>
-    </select>
-  </div>
   <p class="warn" id="tipSection">Tip: Try compact commands like <code>/createnote groceries</code> or <code>/findnote groceries</code>. For editing: <code>/findnote groceries</code> then <code>/editdescription</code>. To see all notes: <code>/showparents</code>. Speech works via the browser's Web Speech API. Gemini here is for **testing only**—your key is exposed.</p>
 
   <div id="log"></div>
@@ -146,8 +138,6 @@ const langSel = document.getElementById("lang");
 const clearBtn= document.getElementById("clear");
 const micBtn  = document.getElementById("micBtn");
 const useTTS  = document.getElementById("useTTS");
-const apiKey  = document.getElementById("apiKey");
-const modelEl = document.getElementById("model");
 
 // Side menu elements
 const menuBtn = document.getElementById("menuBtn");
@@ -498,16 +488,6 @@ function connect(){
         
         // Simple message handling (no more graph popups)
         
-        // Check if we're entering story editing mode from backend
-        if (msg.text.includes("To start editing the story description") || msg.text.includes("כדי להתחיל לערוך את תיאור הסיפור")) {
-          enterStoryMode(null); // Backend will manage the note ID
-        }
-        
-        // Check if story editing is complete
-        if (msg.text.includes("updated successfully") || msg.text.includes("עודכן בהצלחה") || 
-            msg.text.includes("update cancelled") || msg.text.includes("עדכון בוטל")) {
-          exitStoryMode();
-        }
       }
       else if(msg.type==='debug_notes') {
         notesDisplay.textContent = msg.notes;
@@ -536,22 +516,6 @@ function connect(){
   };
 }
 
-/* ---------- Story Mode Functions ---------- */
-function enterStoryMode(noteId) {
-  storyMode = true;
-  currentStoryNoteId = noteId;
-  storyBuffer = "";
-  inputEl.value = "";
-  addMsg("📝 Story mode activated. Start recording or typing your story...", "sys");
-}
-
-function exitStoryMode() {
-  storyMode = false;
-  currentStoryNoteId = null;
-  storyBuffer = "";
-}
-
-// Story description updates are now handled by the backend
 
 /* ---------- Chat flow ---------- */
 formEl.addEventListener("submit", async (e) => {
@@ -597,9 +561,6 @@ function isCommand(text) {
 /* ---------- Speech-to-Text (Web Speech API) ---------- */
 let rec = null;
 let isRecording = false;
-let storyMode = false;
-let currentStoryNoteId = null;
-let storyBuffer = "";
 
 micBtn.onclick = () => {
   if (isRecording) {
@@ -643,21 +604,11 @@ function startRecording() {
           }
         }
         
-        if (storyMode) {
-          // In story mode, show the current transcript in input field
-          // The backend will handle accumulating the content
-          if (finalTranscript) {
-            inputEl.value = finalTranscript;
-          } else if (interimTranscript) {
-            inputEl.value = interimTranscript;
-          }
-        } else {
-          // Normal mode - replace content
-          if (finalTranscript) {
-            inputEl.value = finalTranscript;
-          } else if (interimTranscript) {
-            inputEl.value = interimTranscript;
-          }
+        // Normal mode - replace content
+        if (finalTranscript) {
+          inputEl.value = finalTranscript;
+        } else if (interimTranscript) {
+          inputEl.value = interimTranscript;
         }
       };
       
@@ -693,34 +644,11 @@ function stopRecording() {
   micBtn.textContent = "🎤 Speak";
   micBtn.classList.remove("recording");
   
-  if (storyMode) {
-    if (inputEl.value.trim()) {
-      addMsg("✅ Story content ready. You can continue recording or send to complete the story.", "sys");
-    }
-  } else {
-    if (inputEl.value.trim()) {
-      addMsg("✅ Ready to send: " + inputEl.value, "sys");
-    }
+  if (inputEl.value.trim()) {
+    addMsg("✅ Ready to send: " + inputEl.value, "sys");
   }
 }
 
-/* ---------- Gemini direct (UNSAFE) ---------- */
-async function callGemini(model, userText, lang) {
-  const apiKey = Settings.geminiApiKey; // Use stored API key
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
-  const body = {
-    contents: [{ role: "user", parts: [{ text: `Language hint: ${lang}\nUser: ${userText}` }] }],
-    generationConfig: { temperature: 0.3, topP: 0.9, maxOutputTokens: 512 }
-  };
-  const r = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(body)
-  });
-  if (!r.ok) throw new Error(await r.text());
-  const j = await r.json();
-  return j?.candidates?.[0]?.content?.parts?.map(p => p.text).join("") || "";
-}
 
 /* ---------- Text-to-Speech ---------- */
 async function speakText(text) {

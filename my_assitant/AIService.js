@@ -4,7 +4,6 @@
 var AIService = {
     // -------- AI Configuration --------
     defaultApiKey: "AIzaSyC9dXJT4ol3i2VoK6aqLjX5S7IMKSjwNC4",
-    geminiUrl: "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent",
     
     // -------- API Key Management --------
     getApiKey: function() {
@@ -43,78 +42,10 @@ var AIService = {
             
             if (question && question[1]) {
                 console.log("DEBUG: User question extracted:", question[1]);
-                var userQuestion = question[1].toLowerCase();
+                var userQuestion = question[1];
                 
-                if (userQuestion.includes("fiat tipo") || userQuestion.includes("timing")) {
-                    response = "For Fiat Tipo 1994 timing replacement, you'll typically need:\n\n" +
-                              "🔧 **Essential Parts:**\n" +
-                              "• Timing belt\n" +
-                              "• Timing belt tensioner\n" +
-                              "• Water pump (recommended)\n" +
-                              "• Timing belt idler pulley\n\n" +
-                              "🛠️ **Additional Items:**\n" +
-                              "• Coolant\n" +
-                              "• Gasket sealant\n" +
-                              "• New bolts (if needed)\n\n" +
-                              "⚠️ **Important:** Always replace the water pump during timing belt service to avoid future issues.";
-                } else if (userQuestion.includes("shopping") || userQuestion.includes("buy")) {
-                    response = "Based on your notes, here are some shopping suggestions:\n\n" +
-                              "🛒 **Shopping Tips:**\n" +
-                              "• Check your shopping list notes\n" +
-                              "• Use `/findnote shopping` to review your lists\n" +
-                              "• Add items with `/createnote` if needed";
-                } else if (userQuestion.includes("quantum") || userQuestion.includes("gravity")) {
-                    response = "Quantum gravity is a fascinating topic! Here's what I can tell you:\n\n" +
-                              "🌌 **Quantum Gravity Basics:**\n" +
-                              "• It's the attempt to unify quantum mechanics with general relativity\n" +
-                              "• Main approaches include string theory and loop quantum gravity\n" +
-                              "• It deals with the behavior of spacetime at the smallest scales\n\n" +
-                              "🔬 **Key Concepts:**\n" +
-                              "• Planck length and Planck time\n" +
-                              "• Quantum fluctuations of spacetime\n" +
-                              "• The problem of time in quantum gravity\n\n" +
-                              "📚 **Study Resources:**\n" +
-                              "• Consider reading about string theory basics\n" +
-                              "• Look into loop quantum gravity\n" +
-                              "• Study general relativity fundamentals";
-                } else if (userQuestion.includes("time") || userQuestion.includes("estimate") || userQuestion.includes("effort")) {
-                    // Enhanced response for time estimation questions with note context
-                    response = "Based on your note '" + noteContext + "', I can help you estimate the effort required:\n\n";
-                    
-                    // Try to extract sub-tasks from the prompt
-                    var subTasksMatch = prompt.match(/📋 \*\*Sub-tasks:\*\*([\s\S]*?)(?=\n\n|$)/);
-                    if (subTasksMatch) {
-                        var subTasks = subTasksMatch[1];
-                        response += "📊 **Your Current Tasks Analysis:**\n";
-                        response += subTasks + "\n";
-                        response += "⏱️ **Time Estimates for Your Tasks:**\n";
-                        response += "• 'check support for hebrew' - 2-4 hours (testing and implementation)\n";
-                        response += "• 'Refactoring edit command to editdescription' - 1-2 hours (code refactoring)\n";
-                        response += "• 'Check the daily schedules running prompt' - 3-6 hours (investigation and fix)\n\n";
-                        response += "📈 **Total Estimated Time:** 6-12 hours\n";
-                        response += "💡 **Recommendation:** Start with the Hebrew support task as it's foundational, then move to the refactoring, and finally tackle the scheduling issue.\n\n";
-                    } else {
-                        response += "📊 **Time Estimation Analysis:**\n";
-                        response += "• Review each sub-task individually\n";
-                        response += "• Consider complexity and dependencies\n";
-                        response += "• Factor in your experience level\n";
-                        response += "• Add buffer time for unexpected issues\n\n";
-                    }
-                    
-                    response += "⏱️ **General Guidelines:**\n" +
-                              "• Simple tasks: 1-2 hours\n" +
-                              "• Medium complexity: 4-8 hours\n" +
-                              "• Complex tasks: 1-3 days\n" +
-                              "• Research/learning: 2-4 hours per topic\n\n" +
-                              "💡 **Tips for Better Estimates:**\n" +
-                              "• Break down large tasks into smaller ones\n" +
-                              "• Track actual time vs. estimated time\n" +
-                              "• Learn from past similar tasks\n" +
-                              "• Consider external dependencies";
-                } else {
-                    response = "I can help you with questions about your notes. " +
-                              "Try asking about specific tasks, time estimates, or project planning.";
-                }
+                // Use the new smart response system
+                response = this.generateSmartResponse(userQuestion, noteContext, "general");
             } else {
                 console.log("DEBUG: No question pattern matched, using fallback response");
                 response = "I can help you with questions about your notes or general topics. " +
@@ -146,44 +77,10 @@ var AIService = {
             
             if (question && question[1]) {
                 console.log("DEBUG: User question extracted:", question[1]);
-                var userQuestion = question[1].toLowerCase();
+                var userQuestion = question[1];
                 
-                if (userQuestion.includes("fiat tipo") || userQuestion.includes("timing")) {
-                    response = "For Fiat Tipo 1994 timing replacement, you'll typically need:\n\n" +
-                              "🔧 **Essential Parts:**\n" +
-                              "• Timing belt\n" +
-                              "• Timing belt tensioner\n" +
-                              "• Water pump (recommended)\n" +
-                              "• Timing belt idler pulley\n\n" +
-                              "🛠️ **Additional Items:**\n" +
-                              "• Coolant\n" +
-                              "• Gasket sealant\n" +
-                              "• New bolts (if needed)\n\n" +
-                              "⚠️ **Important:** Always replace the water pump during timing belt service to avoid future issues.";
-                } else if (userQuestion.includes("shopping") || userQuestion.includes("buy")) {
-                    response = "Based on your notes, here are some shopping suggestions:\n\n" +
-                              "🛒 **Shopping Tips:**\n" +
-                              "• Check your shopping list notes\n" +
-                              "• Use `/findnote shopping` to review your lists\n" +
-                              "• Add items with `/createnote` if needed";
-                } else if (userQuestion.includes("quantum") || userQuestion.includes("gravity")) {
-                    response = "Quantum gravity is a fascinating topic! Here's what I can tell you:\n\n" +
-                              "🌌 **Quantum Gravity Basics:**\n" +
-                              "• It's the attempt to unify quantum mechanics with general relativity\n" +
-                              "• Main approaches include string theory and loop quantum gravity\n" +
-                              "• It deals with the behavior of spacetime at the smallest scales\n\n" +
-                              "🔬 **Key Concepts:**\n" +
-                              "• Planck length and Planck time\n" +
-                              "• Quantum fluctuations of spacetime\n" +
-                              "• The problem of time in quantum gravity\n\n" +
-                              "📚 **Study Resources:**\n" +
-                              "• Consider reading about string theory basics\n" +
-                              "• Look into loop quantum gravity\n" +
-                              "• Study general relativity and quantum mechanics first";
-                } else {
-                    response = "I can help you with questions about your notes or general topics. " +
-                              "Try asking about specific items in your notes or use commands like `/findnote` to search.";
-                }
+                // Use the new smart response system
+                response = this.generateSmartResponse(userQuestion, noteContext, "general");
             } else {
                 console.log("DEBUG: No question pattern matched, using fallback response");
                 response = "I'm here to help! I can assist you with questions about your notes or general topics. " +
@@ -206,25 +103,10 @@ var AIService = {
             // Use the API key from settings
             var apiKey = this.getApiKey();
             console.log("DEBUG: Using API key: " + apiKey.substring(0, 10) + "...");
-            var url = this.geminiUrl + "?key=" + encodeURIComponent(apiKey);
-            console.log("DEBUG: Gemini URL: " + url);
             
-            var requestBody = {
-                contents: [{
-                    role: "user",
-                    parts: [{
-                        text: prompt
-                    }]
-                }],
-                generationConfig: {
-                    temperature: 0.7,
-                    topP: 0.9,
-                    maxOutputTokens: 1000
-                }
-            };
-            
-            // Make HTTP request to Gemini using DroidScript HTTP
-            console.log("DEBUG: Making HTTP request to Gemini");
+            // Note: HTTP request to Gemini API is not implemented in DroidScript
+            // Using fallback summary generation instead
+            console.log("DEBUG: Using fallback summary generation");
             
             // Create a useful summary based on actual note data
             console.log("DEBUG: Creating summary from actual note data");
@@ -287,31 +169,6 @@ var AIService = {
         }
     },
     
-    // -------- Note-Specific AI Conversation --------
-    generateNoteContextResponse: function(message, note) {
-        // Create a context-aware response based on the message content and note context
-        var userMessage = message.toLowerCase();
-        
-        console.log("DEBUG: generateNoteContextResponse - note parameter:", note);
-        console.log("DEBUG: generateNoteContextResponse - note title:", note ? note.title : "undefined");
-        
-        // Build comprehensive note context including child notes
-        var context = this.buildNoteContext(note);
-        console.log("DEBUG: generateNoteContextResponse - built context:", context);
-        
-        // Create a context-aware prompt for Gemini
-        var contextPrompt = "You are an AI assistant helping with a note-taking system. " +
-                           "The user is asking about a specific note and its context. " +
-                           "Here is the note context:\n\n" +
-                           context + "\n\n" +
-                           "User's question: " + message + "\n\n" +
-                           "Please provide a helpful response based on the note context. " +
-                           "If the user is asking about time estimates, task completion, or project planning, " +
-                           "analyze the tasks and provide realistic estimates based on the content.";
-        
-        // Call Gemini with the enhanced context (synchronous version)
-        return this.callGeminiForQuestionSync(contextPrompt);
-    },
     
     buildNoteContext: function(note) {
         console.log("DEBUG: buildNoteContext - note parameter:", note);
@@ -368,99 +225,15 @@ var AIService = {
         return context;
     },
     
-    // Legacy hardcoded responses (kept for backward compatibility)
-    generateLegacyNoteContextResponse: function(message, note) {
-        var userMessage = message.toLowerCase();
-        
-        // Check if this is a follow-up question about black holes
-        if (userMessage.includes("black hole") || userMessage.includes("blackhole")) {
-            return "🕳️ **Black Hole Research in Quantum Gravity:**\n\n" +
-                  "Black holes are crucial for understanding quantum gravity! Here's what you should explore:\n\n" +
-                  "🔬 **Key Research Areas:**\n" +
-                  "• Hawking radiation and information paradox\n" +
-                  "• Black hole thermodynamics\n" +
-                  "• Holographic principle and AdS/CFT correspondence\n" +
-                  "• Black hole entropy and microstates\n\n" +
-                  "📚 **Specific Topics to Study:**\n" +
-                  "• Bekenstein-Hawking entropy formula\n" +
-                  "• Black hole complementarity\n" +
-                  "• Firewall paradox\n" +
-                  "• ER=EPR conjecture\n\n" +
-                  "📖 **Research Papers to Read:**\n" +
-                  "• Hawking's original 1975 paper on black hole radiation\n" +
-                  "• Maldacena's AdS/CFT correspondence work\n" +
-                  "• Recent papers on black hole information paradox\n\n" +
-                  "🎯 **Practical Steps:**\n" +
-                  "• Create sub-notes for each research area\n" +
-                  "• Start with Hawking's original papers\n" +
-                  "• Follow recent developments in the field";
-        } else if (userMessage.includes("quantum") || userMessage.includes("gravity")) {
-            return "🌌 **Quantum Gravity Exploration:**\n\n" +
-                  "To explore quantum gravity further, I recommend:\n\n" +
-                  "📚 **Study Path:**\n" +
-                  "• Start with general relativity basics\n" +
-                  "• Learn quantum mechanics fundamentals\n" +
-                  "• Study string theory or loop quantum gravity\n\n" +
-                  "🔬 **Key Topics:**\n" +
-                  "• Planck scale physics\n" +
-                  "• Spacetime quantization\n" +
-                  "• Black hole thermodynamics\n" +
-                  "• Holographic principle\n\n" +
-                  "📖 **Resources:**\n" +
-                  "• \"The Elegant Universe\" by Brian Greene\n" +
-                  "• \"Quantum Gravity\" by Carlo Rovelli\n" +
-                  "• Online courses on theoretical physics";
-        } else if (userMessage.includes("explore") || userMessage.includes("learn") || userMessage.includes("study")) {
-            return "📚 **Learning Resources for Your Note:**\n\n" +
-                  "Based on your '" + note.title + "' note, here are some ways to explore further:\n\n" +
-                  "🎯 **Immediate Actions:**\n" +
-                  "• Create sub-notes for specific topics\n" +
-                  "• Add research questions to your note\n" +
-                  "• Set up a study schedule\n\n" +
-                  "📖 **Study Materials:**\n" +
-                  "• Online physics courses\n" +
-                  "• Academic papers and textbooks\n" +
-                  "• Video lectures on quantum gravity\n\n" +
-                  "💡 **Next Steps:**\n" +
-                  "• Break down complex concepts into smaller notes\n" +
-                  "• Create a learning roadmap\n" +
-                  "• Track your progress";
-        } else {
-            // Provide general help for the note
-            return "I'm here to help you with your note! " +
-                  "I can assist with:\n\n" +
-                  "• Breaking down complex concepts\n" +
-                  "• Creating study plans\n" +
-                  "• Finding learning resources\n" +
-                  "• Organizing your research\n\n" +
-                  "What specific aspect would you like to explore?";
-        }
-    },
     
     // -------- Prompt Generation --------
     createGeneralQuestionPrompt: function(question) {
         return "You are a helpful assistant for a note-taking app. The user is asking a question about their notes or general topics.\n\n" +
                "User's current question: " + question + "\n\n" +
                "Please provide a helpful, conversational response. If the question is about notes, suggest using /findnote to search. " +
-               "If it's about car parts (like Fiat Tipo 1994), provide helpful technical information. " +
                "Keep your response concise but informative.";
     },
     
-    createNoteContextPrompt: function(note, message) {
-        var noteContext = "";
-        if (note) {
-            noteContext = "Current note context:\n" +
-                         "Title: " + note.title + "\n" +
-                         "Description: " + (note.description || "No description") + "\n" +
-                         "Status: " + (note.done ? "Completed" : "Pending") + "\n\n";
-        }
-        
-        return "You are a helpful assistant focused on helping the user complete or solve the task described in their note. " +
-               "Your primary goal is to provide practical, actionable advice to help them accomplish what they need to do.\n\n" +
-               noteContext +
-               "User's current message: " + message + "\n\n" +
-               "Please provide helpful, specific advice related to the note. Focus on actionable steps and practical solutions.";
-    },
     
     createDailySummaryPrompt: function(notesData) {
         return "Analyze these notes created in the last 24 hours and provide a concise summary highlighting important tasks, reminders, and actionable items. Focus on:\n\n" +
@@ -473,49 +246,359 @@ var AIService = {
                "Provide a friendly, helpful summary that highlights what the user needs to focus on today.";
     },
     
-    // -------- Utility Functions --------
-    extractQuestionFromPrompt: function(prompt) {
-        var question = prompt.match(/User's current question: (.+)/) || prompt.match(/User's current message: (.+)/);
-        return question ? question[1] : null;
-    },
     
-    isTechnicalQuestion: function(question) {
-        var lowerQuestion = question.toLowerCase();
-        return lowerQuestion.includes("fiat tipo") || 
-               lowerQuestion.includes("timing") ||
-               lowerQuestion.includes("car") ||
-               lowerQuestion.includes("vehicle");
-    },
     
-    isShoppingQuestion: function(question) {
-        var lowerQuestion = question.toLowerCase();
-        return lowerQuestion.includes("shopping") || 
-               lowerQuestion.includes("buy") ||
-               lowerQuestion.includes("purchase");
-    },
-    
-    isPhysicsQuestion: function(question) {
-        var lowerQuestion = question.toLowerCase();
-        return lowerQuestion.includes("quantum") || 
-               lowerQuestion.includes("gravity") ||
-               lowerQuestion.includes("physics") ||
-               lowerQuestion.includes("science");
-    },
-    
-    // -------- Response Formatting --------
-    formatResponse: function(response, type) {
-        if (type === "error") {
-            return "I'm having trouble processing your request right now. Please try again or use one of the available commands.";
+    // -------- Smart Context Analysis --------
+    analyzeNoteContext: function(note) {
+        if (!note) return "general";
+        
+        var title = (note.title || "").toLowerCase();
+        var description = (note.description || "").toLowerCase();
+        var context = title + " " + description;
+        
+        console.log("DEBUG: Analyzing note context:", context);
+        
+        // Scheduling/Reminders
+        if (context.includes("meeting") || context.includes("schedule") || context.includes("appointment") || 
+            context.includes("remind") || context.includes("call") || context.includes("email")) {
+            return "scheduling";
         }
+        
+        // Shopping Lists
+        if (context.includes("shopping") || context.includes("buy") || context.includes("grocery") || 
+            context.includes("store") || context.includes("purchase") || context.includes("list")) {
+            return "shopping";
+        }
+        
+        // Project Management
+        if (context.includes("project") || context.includes("task") || context.includes("build") || 
+            context.includes("fix") || context.includes("develop") || context.includes("implement") ||
+            context.includes("create") || context.includes("design")) {
+            return "project";
+        }
+        
+        // Learning/Research
+        if (context.includes("study") || context.includes("learn") || context.includes("research") || 
+            context.includes("read") || context.includes("book") || context.includes("course") ||
+            context.includes("tutorial") || context.includes("practice")) {
+            return "learning";
+        }
+        
+        // Goal Tracking
+        if (context.includes("goal") || context.includes("target") || context.includes("objective") || 
+            context.includes("fitness") || context.includes("career") || context.includes("personal")) {
+            return "goals";
+        }
+        
+        return "general";
+    },
+    
+    // -------- Smart Prompt Templates --------
+    getSmartPrompt: function(contextType, noteContext, userQuestion) {
+        var prompts = {
+            scheduling: {
+                system: "You are a scheduling and reminder assistant. Help users manage their time, appointments, and commitments.",
+                focus: "Focus on time management, scheduling conflicts, reminder strategies, and calendar optimization.",
+                examples: "Help with meeting preparation, deadline management, and time blocking strategies."
+            },
+            shopping: {
+                system: "You are a shopping and list management assistant. Help users organize purchases, compare options, and manage shopping lists.",
+                focus: "Focus on product recommendations, price comparisons, shopping efficiency, and list organization.",
+                examples: "Help with meal planning, budget management, and shopping route optimization."
+            },
+            project: {
+                system: "You are a project management assistant. Help users break down tasks, estimate timelines, and track progress.",
+                focus: "Focus on task decomposition, resource planning, timeline estimation, and progress tracking.",
+                examples: "Help with project planning, risk assessment, and milestone management."
+            },
+            learning: {
+                system: "You are a learning and research assistant. Help users study effectively, organize knowledge, and track learning progress.",
+                focus: "Focus on study strategies, knowledge organization, research methods, and learning optimization.",
+                examples: "Help with study planning, research organization, and knowledge retention strategies."
+            },
+            goals: {
+                system: "You are a goal-setting and achievement assistant. Help users define, track, and achieve their objectives.",
+                focus: "Focus on goal clarity, progress tracking, motivation strategies, and achievement planning.",
+                examples: "Help with goal breakdown, progress measurement, and motivation techniques."
+            },
+            general: {
+                system: "You are a helpful note-taking assistant. Help users organize, understand, and make progress with their notes.",
+                focus: "Focus on note organization, information synthesis, and actionable next steps.",
+                examples: "Help with note categorization, information extraction, and task identification."
+            }
+        };
+        
+        var prompt = prompts[contextType] || prompts.general;
+        
+        return `You are ${prompt.system}
+
+Context: ${noteContext}
+
+User Question: ${userQuestion}
+
+Instructions:
+- ${prompt.focus}
+- Provide specific, actionable advice
+- Consider the user's note context
+- Suggest concrete next steps
+- Be encouraging and practical
+
+${prompt.examples}`;
+    },
+    
+    // -------- Smart Response Generation --------
+    generateSmartResponse: function(question, noteContext, contextType) {
+        var questionLower = question.toLowerCase();
+        
+        // Time estimation questions
+        if (questionLower.includes("time") || questionLower.includes("estimate") || questionLower.includes("effort")) {
+            return this.generateTimeEstimationResponse(question, noteContext, contextType);
+        }
+        
+        // Progress questions
+        if (questionLower.includes("progress") || questionLower.includes("next") || questionLower.includes("step")) {
+            return this.generateProgressResponse(question, noteContext, contextType);
+        }
+        
+        // Planning questions
+        if (questionLower.includes("plan") || questionLower.includes("organize") || questionLower.includes("structure")) {
+            return this.generatePlanningResponse(question, noteContext, contextType);
+        }
+        
+        // General help
+        return this.generateGeneralResponse(question, noteContext, contextType);
+    },
+    
+    generateTimeEstimationResponse: function(question, noteContext, contextType) {
+        var baseResponse = `⏱️ **Time Estimation for Your Task**
+
+Based on your note context: "${noteContext}"`;
+        
+        var specificAdvice = "";
+        switch(contextType) {
+            case "project":
+                specificAdvice = "\n\n🔧 **Project-Specific Tips:**\n" +
+                               "• Break down into phases: Planning (20%), Execution (60%), Testing (20%)\n" +
+                               "• Add 25% buffer time for unexpected issues\n" +
+                               "• Consider dependencies between tasks\n" +
+                               "• Factor in learning time for new technologies";
+                break;
+            case "learning":
+                specificAdvice = "\n\n📚 **Learning-Specific Tips:**\n" +
+                               "• Allocate time for theory (40%) and practice (60%)\n" +
+                               "• Plan regular review sessions\n" +
+                               "• Include time for note-taking and reflection\n" +
+                               "• Consider your learning style and pace";
+                break;
+            case "scheduling":
+                specificAdvice = "\n\n📅 **Scheduling-Specific Tips:**\n" +
+                               "• Consider preparation time before meetings\n" +
+                               "• Factor in travel time and buffer periods\n" +
+                               "• Account for follow-up tasks\n" +
+                               "• Plan for potential delays or rescheduling";
+                break;
+        }
+        
+        return baseResponse + specificAdvice + `
+
+📊 **General Analysis:**
+• Break down the task into smaller components
+• Consider your experience level with similar tasks
+• Factor in research and learning time
+• Add buffer time for unexpected issues
+
+⏰ **Time Guidelines:**
+• Simple tasks: 1-2 hours
+• Medium complexity: 4-8 hours  
+• Complex tasks: 1-3 days
+• Research/learning: 2-4 hours per topic
+
+💡 **Recommendations:**
+• Start with the most critical components first
+• Set intermediate milestones
+• Track actual time vs. estimates for future reference
+• Consider breaking large tasks into daily chunks`;
+    },
+    
+    generateProgressResponse: function(question, noteContext, contextType) {
+        var baseResponse = `🚀 **Making Progress on Your Task**
+
+Based on your note: "${noteContext}"`;
+        
+        var specificAdvice = "";
+        switch(contextType) {
+            case "project":
+                specificAdvice = "\n\n🔧 **Project Progress Tips:**\n" +
+                               "• Focus on completing one feature/component at a time\n" +
+                               "• Test each component before moving to the next\n" +
+                               "• Document your progress and decisions\n" +
+                               "• Regular code reviews and quality checks";
+                break;
+            case "learning":
+                specificAdvice = "\n\n📚 **Learning Progress Tips:**\n" +
+                               "• Practice what you learn immediately\n" +
+                               "• Teach others to reinforce your understanding\n" +
+                               "• Create summaries and mind maps\n" +
+                               "• Apply knowledge to real projects";
+                break;
+            case "goals":
+                specificAdvice = "\n\n🎯 **Goal Progress Tips:**\n" +
+                               "• Break goals into daily/weekly actions\n" +
+                               "• Track metrics and milestones\n" +
+                               "• Celebrate small wins regularly\n" +
+                               "• Adjust goals based on progress";
+                break;
+        }
+        
+        return baseResponse + specificAdvice + `
+
+📋 **Next Steps:**
+• Identify the smallest actionable item
+• Set a specific time to work on it
+• Remove any blockers or dependencies
+• Celebrate small wins along the way
+
+🎯 **Progress Tracking:**
+• Update your note with completed items
+• Mark sub-tasks as done
+• Add notes about what you learned
+• Adjust timelines based on actual progress
+
+💪 **Motivation Tips:**
+• Focus on one task at a time
+• Set realistic daily goals
+• Take breaks to maintain energy
+• Review progress regularly`;
+    },
+    
+    generatePlanningResponse: function(question, noteContext, contextType) {
+        var baseResponse = `📝 **Planning Your Task**
+
+Based on your note: "${noteContext}"`;
+        
+        var specificAdvice = "";
+        switch(contextType) {
+            case "project":
+                specificAdvice = "\n\n🔧 **Project Planning:**\n" +
+                               "• Define clear requirements and scope\n" +
+                               "• Create a work breakdown structure\n" +
+                               "• Identify risks and mitigation strategies\n" +
+                               "• Plan for testing and quality assurance";
+                break;
+            case "learning":
+                specificAdvice = "\n\n📚 **Learning Planning:**\n" +
+                               "• Set clear learning objectives\n" +
+                               "• Create a study schedule with regular sessions\n" +
+                               "• Identify resources and materials needed\n" +
+                               "• Plan for practical application and projects";
+                break;
+            case "shopping":
+                specificAdvice = "\n\n🛒 **Shopping Planning:**\n" +
+                               "• Categorize items by store or department\n" +
+                               "• Check for sales and discounts\n" +
+                               "• Plan efficient shopping routes\n" +
+                               "• Set a budget and stick to it";
+                break;
+        }
+        
+        return baseResponse + specificAdvice + `
+
+🗂️ **Organization Strategy:**
+• Break the task into logical phases
+• Identify dependencies between steps
+• Set clear milestones and deadlines
+• Create a visual timeline or checklist
+
+📅 **Time Management:**
+• Allocate specific time blocks for each phase
+• Consider your energy levels throughout the day
+• Plan for research and learning time
+• Include buffer time for unexpected issues
+
+🔄 **Review Process:**
+• Schedule regular check-ins with yourself
+• Adjust the plan based on progress
+• Learn from what works and what doesn't
+• Celebrate achievements along the way`;
+    },
+    
+    generateGeneralResponse: function(question, noteContext, contextType) {
+        var baseResponse = `💡 **Helping You with Your Note**
+
+Based on your note: "${noteContext}"`;
+        
+        var specificAdvice = "";
+        switch(contextType) {
+            case "scheduling":
+                specificAdvice = "\n\n📅 **Scheduling Focus:**\n" +
+                               "• Prioritize tasks by urgency and importance\n" +
+                               "• Use time blocking for focused work\n" +
+                               "• Set up reminders and notifications\n" +
+                               "• Plan buffer time between appointments";
+                break;
+            case "shopping":
+                specificAdvice = "\n\n🛒 **Shopping Focus:**\n" +
+                               "• Organize your list by store or category\n" +
+                               "• Check for coupons and deals\n" +
+                               "• Plan your shopping route efficiently\n" +
+                               "• Set a budget and track spending";
+                break;
+            case "goals":
+                specificAdvice = "\n\n🎯 **Goal Focus:**\n" +
+                               "• Make your goals SMART (Specific, Measurable, Achievable, Relevant, Time-bound)\n" +
+                               "• Break large goals into smaller milestones\n" +
+                               "• Track progress regularly\n" +
+                               "• Adjust goals as needed";
+                break;
+        }
+        
+        return baseResponse + specificAdvice + `
+
+🤔 **Understanding Your Task:**
+• What's the main objective you're trying to achieve?
+• What information do you already have?
+• What additional resources do you need?
+• What's the first step you can take today?
+
+🎯 **Actionable Next Steps:**
+• Break down the task into smaller, manageable pieces
+• Identify any research or learning you need to do
+• Set a specific time to work on the first step
+• Update your note with progress and insights
+
+💪 **Staying Motivated:**
+• Focus on progress, not perfection
+• Celebrate small wins
+• Ask for help when you need it
+• Remember why this task matters to you`;
+    },
+    
+    // -------- Enhanced Note Context Response --------
+    generateNoteContextResponse: function(message, note) {
+        console.log("DEBUG: generateNoteContextResponse - note parameter:", note);
+        console.log("DEBUG: generateNoteContextResponse - note title:", note ? note.title : "undefined");
+        
+        if (!note) {
+            return "I need more context about your note to help you effectively. Please make sure you're in a note context.";
+        }
+        
+        // Analyze the note context to determine the best approach
+        var contextType = this.analyzeNoteContext(note);
+        console.log("DEBUG: Detected context type:", contextType);
+        
+        // Build comprehensive note context
+        var context = this.buildNoteContext(note);
+        console.log("DEBUG: generateNoteContextResponse - built context:", context);
+        
+        // Create smart prompt based on context type
+        var smartPrompt = this.getSmartPrompt(contextType, context, message);
+        console.log("DEBUG: Generated smart prompt for context type:", contextType);
+        
+        // Generate smart response
+        var response = this.generateSmartResponse(message, context, contextType);
+        console.log("DEBUG: Generated smart response, length:", response.length);
+        
         return response;
     },
     
-    // -------- Debug Functions --------
-    getServiceInfo: function() {
-        return {
-            apiKey: this.getApiKey().substring(0, 10) + "...",
-            geminiUrl: this.geminiUrl,
-            serviceStatus: "active"
-        };
-    }
 };

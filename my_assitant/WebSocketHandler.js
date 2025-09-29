@@ -1368,12 +1368,4 @@ var WebSocketHandler = {
         return "I understood your request and I'm processing it.";
     },
     
-    // -------- Utility Functions --------
-    getServerInfo: function() {
-        return {
-            port: this.port,
-            serverStatus: this.server ? "active" : "inactive",
-            webViewStatus: this.webView ? "active" : "inactive"
-        };
-    }
 };
