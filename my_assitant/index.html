@@ -73,7 +73,7 @@
       <option>gemini-1.5-pro</option>
     </select>
   </div>
-  <p class="warn" id="tipSection">Tip: Try <code>create a note 'groceries'</code> (EN) or <code>צור פתק 'קניות'</code> (HE). For editing/deleting: <code>find note 'groceries'</code> then <code>edit</code> or <code>delete</code>. Speech works via the browser's Web Speech API. Gemini here is for **testing only**—your key is exposed.</p>
+  <p class="warn" id="tipSection">Tip: Try compact commands like <code>/createnote groceries</code> or <code>/findnote groceries</code>. For editing: <code>/findnote groceries</code> then <code>edit</code>. To see all notes: <code>/showparents</code>. Speech works via the browser's Web Speech API. Gemini here is for **testing only**—your key is exposed.</p>
 
   <div id="log"></div>
 
@@ -172,12 +172,95 @@ const commandsContent = document.getElementById("commandsContent");
 // Track current mode for dynamic commands
 let currentMode = 'main'; // main, find_context, story_editing, pending_creation, etc.
 
+// Dynamic commands cache
+let availableCommands = [];
+let commandsLoaded = false;
+
+// Command history management
+let commandHistory = [];
+const MAX_COMMAND_HISTORY = 10;
+
+// Function to add command to history
+function addToCommandHistory(command) {
+  // Remove if already exists to avoid duplicates
+  commandHistory = commandHistory.filter(cmd => cmd !== command);
+  // Add to beginning
+  commandHistory.unshift(command);
+  // Keep only the latest 10
+  if (commandHistory.length > MAX_COMMAND_HISTORY) {
+    commandHistory = commandHistory.slice(0, MAX_COMMAND_HISTORY);
+  }
+  // Save to localStorage
+  localStorage.setItem('commandHistory', JSON.stringify(commandHistory));
+}
+
+// Function to load command history from localStorage
+function loadCommandHistory() {
+  const saved = localStorage.getItem('commandHistory');
+  if (saved) {
+    try {
+      commandHistory = JSON.parse(saved);
+    } catch (e) {
+      commandHistory = [];
+    }
+  }
+}
+
+// Function to get command history
+function getCommandHistory() {
+  return commandHistory;
+}
+
+// Function to load available commands from backend
+function loadAvailableCommands() {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    try {
+      ws.send(JSON.stringify({type: 'get_commands'}));
+    } catch (error) {
+      console.log("Error requesting commands:", error);
+    }
+  }
+}
+
+// Function to generate dynamic commands HTML
+function generateDynamicCommands() {
+  if (availableCommands.length === 0) {
+    return '<div class="command-category"><h4>❌ No commands available</h4></div>';
+  }
+  
+  // Group commands by category
+  const categories = {};
+  availableCommands.forEach(cmd => {
+    if (!categories[cmd.category]) {
+      categories[cmd.category] = [];
+    }
+    categories[cmd.category].push(cmd);
+  });
+  
+  let html = '';
+  for (const category in categories) {
+    html += `<div class="command-category">`;
+    html += `<h4>${category}</h4>`;
+    categories[category].forEach(cmd => {
+      const commandText = cmd.requiresParam ? cmd.command + ' ' : cmd.command;
+      html += `<button class="command-btn" data-command="${commandText}">${cmd.command}</button>`;
+    });
+    html += `</div>`;
+  }
+  
+  return html;
+}
+
 // Function to update mode based on backend messages
 function updateModeFromMessage(message) {
   if (message.includes("What would you like to do?") || message.includes("מה תרצה לעשות?")) {
     currentMode = 'find_context';
   } else if (message.includes("To start editing") || message.includes("כדי להתחיל לערוך")) {
     currentMode = 'story_editing';
+  } else if (message.includes("Started AI conversation") || message.includes("התחלתי שיחה עם AI")) {
+    currentMode = 'ai_conversation';
+  } else if (message.includes("AI conversation cancelled") || message.includes("שיחה עם AI בוטלה")) {
+    currentMode = 'main';
   } else if (message.includes("Do you want to create") || message.includes("האם תרצה ליצור") || 
              message.includes("Do you want to delete") || message.includes("האם תרצה למחוק") ||
              message.includes("Do you want to mark") || message.includes("האם תרצה לסמן")) {
@@ -204,37 +287,65 @@ clearBtn.onclick = () => { logEl.innerHTML = ""; };
 function populateCommands() {
   commandsContent.innerHTML = '';
   
-  if (currentMode === 'main') {
-    // Main mode - show primary commands
-    commandsContent.innerHTML = `
+  // Add history section if there are commands in history
+  const history = getCommandHistory();
+  if (history.length > 0) {
+    let historyHtml = `
       <div class="command-category">
-        <h4>📝 Create</h4>
-        <button class="command-btn" data-command="create note">Create note</button>
-        <button class="command-btn" data-command="create story">Create story</button>
-      </div>
-      <div class="command-category">
-        <h4>🔍 Find</h4>
-        <button class="command-btn" data-command="find note">Find notes</button>
-        <button class="command-btn" data-command="find note by id">Find by ID</button>
-      </div>
-      <div class="command-category">
-        <h4>❓ Help</h4>
-        <button class="command-btn" data-command="help">Get help</button>
-      </div>
+        <h4>🕒 Recent Commands</h4>
     `;
+    for (let i = 0; i < Math.min(history.length, 5); i++) {
+      const cmd = history[i];
+      historyHtml += `<button class="command-btn" data-command="${cmd}">${cmd}</button>`;
+    }
+    historyHtml += `</div>`;
+    commandsContent.innerHTML += historyHtml;
+  }
+  
+  if (currentMode === 'main') {
+    // Main mode - show dynamic commands from backend
+    if (commandsLoaded && availableCommands.length > 0) {
+      commandsContent.innerHTML += generateDynamicCommands();
+    } else {
+      // Fallback to static commands if dynamic loading failed
+      commandsContent.innerHTML += `
+        <div class="command-category">
+          <h4>📝 Create</h4>
+          <button class="command-btn" data-command="/createnote ">/createnote</button>
+          <button class="command-btn" data-command="/createstory ">/createstory</button>
+        </div>
+        <div class="command-category">
+          <h4>🔍 Find</h4>
+          <button class="command-btn" data-command="/findnote ">/findnote</button>
+          <button class="command-btn" data-command="/findbyid ">/findbyid</button>
+        </div>
+        <div class="command-category">
+          <h4>📋 Show</h4>
+          <button class="command-btn" data-command="/showparents">/showparents</button>
+        </div>
+        <div class="command-category">
+          <h4>❓ Help</h4>
+          <button class="command-btn" data-command="/help">/help</button>
+        </div>
+      `;
+    }
   } else if (currentMode === 'find_context') {
     // Find context - show sub-commands for found note
-    commandsContent.innerHTML = `
+    commandsContent.innerHTML += `
       <div class="command-category">
         <h4>✏️ Actions</h4>
-        <button class="command-btn" data-command="edit description">Edit description</button>
-        <button class="command-btn" data-command="mark done">Mark done</button>
-        <button class="command-btn" data-command="delete">Delete</button>
-        <button class="command-btn" data-command="create sub-note">Create sub-note</button>
+        <button class="command-btn" data-command="/edit">/edit</button>
+        <button class="command-btn" data-command="/markdone">/markdone</button>
+        <button class="command-btn" data-command="/delete">/delete</button>
+        <button class="command-btn" data-command="/createsub">/createsub</button>
+      </div>
+      <div class="command-category">
+        <h4>🤖 AI Assistant</h4>
+        <button class="command-btn" data-command="/talkai">/talkai</button>
       </div>
       <div class="command-category">
         <h4>❓ Help</h4>
-        <button class="command-btn" data-command="help">Get help</button>
+        <button class="command-btn" data-command="/help">/help</button>
       </div>
       <div class="command-category">
         <h4>🚫 Cancel</h4>
@@ -243,23 +354,35 @@ function populateCommands() {
     `;
   } else if (currentMode === 'story_editing') {
     // Story editing mode - show story-specific commands
-    commandsContent.innerHTML = `
+    commandsContent.innerHTML += `
       <div class="command-category">
         <h4>📖 Story Mode</h4>
         <button class="command-btn" data-command="stop editing description">Stop editing</button>
       </div>
       <div class="command-category">
         <h4>❓ Help</h4>
-        <button class="command-btn" data-command="help">Get help</button>
+        <button class="command-btn" data-command="/help">/help</button>
       </div>
       <div class="command-category">
         <h4>🚫 Cancel</h4>
         <button class="command-btn" data-command="cancel">Cancel editing</button>
       </div>
     `;
+  } else if (currentMode === 'ai_conversation') {
+    // AI conversation mode - show conversation commands
+    commandsContent.innerHTML += `
+      <div class="command-category">
+        <h4>🤖 AI Conversation</h4>
+        <button class="command-btn" data-command="cancel">End conversation</button>
+      </div>
+      <div class="command-category">
+        <h4>❓ Help</h4>
+        <button class="command-btn" data-command="/help">/help</button>
+      </div>
+    `;
   } else if (currentMode === 'pending_creation') {
     // Pending creation - show confirmation commands
-    commandsContent.innerHTML = `
+    commandsContent.innerHTML += `
       <div class="command-category">
         <h4>✅ Confirm</h4>
         <button class="command-btn" data-command="yes">Yes</button>
@@ -272,7 +395,7 @@ function populateCommands() {
     `;
   } else if (currentMode === 'note_selection') {
     // Note selection from multiple results
-    commandsContent.innerHTML = `
+    commandsContent.innerHTML += `
       <div class="command-category">
         <h4>🔢 Select</h4>
         <button class="command-btn" data-command="1">Select 1</button>
@@ -310,6 +433,8 @@ document.addEventListener('click', (e) => {
     if (command) {
       // Add the command to the input field with whitespace at the end
       inputEl.value = command + ' ';
+      // Add to command history
+      addToCommandHistory(command);
       // Close the popup
       commandsPopup.classList.remove("show");
       commandsOverlay.classList.remove("show");
@@ -442,7 +567,11 @@ function connect(){
   // Connect to DroidScript WebSocket server on localhost:8080
   const url = 'ws://localhost:8080';
   ws = new WebSocket(url);
-  ws.onopen = ()=>addMsg('Connected to DroidScript backend','sys');
+  ws.onopen = ()=>{
+    addMsg('Connected to DroidScript backend','sys');
+    // Load available commands from backend
+    loadAvailableCommands();
+  };
   ws.onclose= ()=>addMsg('Disconnected from backend','sys');
   ws.onerror= e=>addMsg('WebSocket error','sys');
   ws.onmessage = ev=>{
@@ -477,6 +606,12 @@ function connect(){
         notesDisplay.style.display = "none";
         showNotes.textContent = "Show Notes (Debug)";
       }
+      else if(msg.type==='available_commands') {
+        // Handle dynamic commands from backend
+        availableCommands = msg.commands || [];
+        commandsLoaded = true;
+        console.log("Loaded dynamic commands:", availableCommands);
+      }
       else addMsg(ev.data,'sys'); 
     }
     catch{ addMsg(ev.data,'bot'); }
@@ -508,6 +643,11 @@ formEl.addEventListener("submit", async (e) => {
 
   addMsg(text, "you");
   
+  // Add to command history if it looks like a command
+  if (isCommand(text)) {
+    addToCommandHistory(text);
+  }
+  
   // Always send to backend - let backend handle story editing mode
   inputEl.value = "";
   
@@ -525,6 +665,16 @@ formEl.addEventListener("submit", async (e) => {
   }
   scrollToBottom();
 });
+
+// Function to check if text looks like a command
+function isCommand(text) {
+  const commandPatterns = [
+    /^\/\w+/i, // Slash commands
+    /^(create|find|show|help|edit|delete|mark|talk|stop|cancel|yes|no)\b/i,
+    /^(צור|מצא|הצג|עזרה|ערוך|מחק|סמן|דבר|עצור|בטל|כן|לא)\b/i
+  ];
+  return commandPatterns.some(pattern => pattern.test(text));
+}
 
 /* ---------- Speech-to-Text (Web Speech API) ---------- */
 let rec = null;
@@ -719,6 +869,7 @@ function hideTipAfterDelay() {
 
 // Connect to DroidScript backend on page load
 initializeSettings();
+loadCommandHistory();
 connect();
 hideTipAfterDelay();
 </script>

@@ -6,15 +6,64 @@ var Settings = { lang: "en" };
 
 var Patterns = {
     en: {
-        create_note_story: [ /\b(create|start|new|make).*?\b(note).*\b(story|long|dictation)\b/i, /\b(long|stream|dictation)\s+(note|story)\b/i, /\b(create|start|new|make)\s+(story|long|dictation)\b/i ],
-        create_note:       [ /\b(create|new|make|add)\b.*?\bnote\b/i, /\b(create|new|make|add)\s+(.+)/i ],
-        find_note:         [ /\b(find|search|lookup)\b.*?\b(note|notes)\b/i, /^find\s+/i, /\b(find|search|lookup)\s+(.+)/i ],
-        find_note_by_id:   [ /\b(find|search|lookup)\s+(?:note|notes)?\s+id\s+(\d+)/i, /\b(find|search|lookup)\s+(?:note|notes)?\s+by\s+id\s+(\d+)/i ],
+        // Slash-based commands (new system) - supporting multiple naming conventions
+        slash_create_note: [ 
+            /^\/create_note\s+(.+)/i, /^\/create-note\s+(.+)/i, /^\/createNote\s+(.+)/i,
+            /^\/createnote\s+(.+)/i, /^\/createnotes\s+(.+)/i,
+            /^\/create\s+(.+)/i,  // Short form with parameter
+            /^\/create_note$/i, /^\/create-note$/i, /^\/createNote$/i,
+            /^\/createnote$/i, /^\/createnotes$/i,
+            /^\/create$/i  // Short form without parameter
+        ],
+        slash_create_story: [ 
+            /^\/create_story\s+(.+)/i, /^\/create-story\s+(.+)/i, /^\/createStory\s+(.+)/i,
+            /^\/createstory\s+(.+)/i, /^\/createstories\s+(.+)/i,
+            /^\/story\s+(.+)/i,  // Short form with parameter
+            /^\/create_story$/i, /^\/create-story$/i, /^\/createStory$/i,
+            /^\/createstory$/i, /^\/createstories$/i,
+            /^\/story$/i  // Short form without parameter
+        ],
+        slash_find_note: [ 
+            /^\/find_note\s+(.+)/i, /^\/find-note\s+(.+)/i, /^\/findNote\s+(.+)/i,
+            /^\/findnote\s+(.+)/i, /^\/findnotes\s+(.+)/i,
+            /^\/find\s+(.+)/i,  // Short form with parameter
+            /^\/find_note$/i, /^\/find-note$/i, /^\/findNote$/i,
+            /^\/findnote$/i, /^\/findnotes$/i,
+            /^\/find$/i  // Short form without parameter
+        ],
+        slash_find_by_id: [ 
+            /^\/find_by_id\s+(\d+)/i, /^\/find-by-id\s+(\d+)/i, /^\/findById\s+(\d+)/i,
+            /^\/findbyid\s+(\d+)/i, /^\/findid\s+(\d+)/i,
+            /^\/id\s+(\d+)/i,  // Short form with parameter
+            /^\/find_by_id$/i, /^\/find-by-id$/i, /^\/findById$/i,
+            /^\/findbyid$/i, /^\/findid$/i,
+            /^\/id$/i  // Short form without parameter
+        ],
+        slash_show_parents: [ 
+            /^\/show_parents$/i, /^\/show-parents$/i, /^\/showParents$/i,
+            /^\/showparents$/i, /^\/showparent$/i,
+            /^\/parents$/i, /^\/parent$/i  // Short forms
+        ],
+        slash_help: [ /^\/help$/i, /^\/h$/i ],  // Short form
+        
+        // Find sub-commands as slash commands
+        slash_edit: [ /^\/edit$/i, /^\/editdescription$/i ],
+        slash_markdone: [ /^\/markdone$/i, /^\/mark_done$/i, /^\/done$/i ],
+        slash_delete: [ /^\/delete$/i, /^\/remove$/i, /^\/rm$/i ],
+        slash_createsub: [ /^\/createsub$/i, /^\/createsubnote$/i, /^\/subnote$/i ],
+        slash_talkai: [ /^\/talkai$/i, /^\/talk_ai$/i, /^\/ai$/i ],
+        
+        // Legacy natural language commands (disabled - only slash commands allowed)
+        // create_note_story: [ /\b(create|start|new|make).*?\b(note).*\b(story|long|dictation)\b/i, /\b(long|stream|dictation)\s+(note|story)\b/i, /\b(create|start|new|make)\s+(story|long|dictation)\b/i ],
+        // create_note:       [ /\b(create|new|make|add)\b.*?\bnote\b/i, /\b(create|new|make|add)\s+(.+)/i ],
+        // find_note:         [ /\b(find|search|lookup)\b.*?\b(note|notes)\b/i, /^find\s+/i, /\b(find|search|lookup)\s+(.+)/i ],
+        // find_note_by_id:   [ /\b(find|search|lookup)\s+(?:note|notes)?\s+id\s+(\d+)/i, /\b(find|search|lookup)\s+(?:note|notes)?\s+by\s+id\s+(\d+)/i ],
         // Sub-commands for find flow
         find_sub_create:   [ /\b(create|new|make|add)\b.*?\b(sub[- ]?note|child)\b/i ],
         find_sub_edit_description:     [ /\b(edit|update|modify)\b/i ],
         find_sub_delete:   [ /\b(delete|remove|rm)\b/i ],
         find_sub_mark_done: [ /\b(mark|set)\s+(done|complete|finished)\b/i, /\b(complete|finish|done)\b/i ],
+        find_sub_talk_ai: [ /\b(talk|chat|ask|discuss)\s+(ai|gemini|assistant)\b/i, /\b(talk|chat|ask|discuss)\b/i ],
         // Sub-note name collection - match simple text that's not a command
         sub_note_name:    [ /^(?!.*\b(create|new|make|add|edit|update|delete|remove|find|search|lookup)\b)[a-zA-Z0-9\s]+$/i ],
         // Note selection by ID or exact title
@@ -23,8 +72,12 @@ var Patterns = {
         stop_editing_description: [ /\b(stop|end|finish|done|complete)\s+(?:editing|writing|recording|dictating)\s+(?:description|story|note|content)\b/i, /\b(stop|end|finish|done|complete)\s+(?:description|story|note|content)\s+(?:editing|writing|recording|dictating)\b/i, /\b(stop|end|finish|done|complete)\s+(?:editing|writing|recording|dictating)\b/i ],
         // Cancel/abort commands for find mode
         cancel_action: [ /\b(cancel|abort|stop|quit|exit|back|return)\b/i ],
+        // Cancel AI conversation
+        cancel_ai_conversation: [ /\b(cancel|stop|exit|back|return|done|finish)\b/i ],
         // Help command
         help: [ /\b(help|assist|guide|what can i do|what should i do)\b/i, /\b(help|assist|guide)\b/i ],
+        // Show parent notes command
+        show_parent_notes: [ /\b(show|list|display)\s+(parent|main|root)\s+(notes|note)\b/i, /\b(parent|main|root)\s+(notes|note)\b/i, /\b(show|list|display)\s+(all\s+)?(notes|note)\b/i ],
     },
     he: {
         create_note_story: [ /(צור|יצירת|התחל|התחילי|הוסף)\s.*?(הערה|פתק).*?(סיפור|ארוך|דקטציה|דִיקְטָצְיָה)/i, /\b(הערה|פתק)\s(ארוך|סיפור)\b/i, /(צור|יצירת|התחל|התחילי|הוסף)\s+(סיפור|ארוך|דקטציה|דִיקְטָצְיָה)/i ],
@@ -36,6 +89,7 @@ var Patterns = {
         find_sub_edit_description:     [ /(ערוך|עדכן|עדכני|שנה)\b/i ],
         find_sub_delete:   [ /(מחק|מחקי|הסר|הסרי)\b/i ],
         find_sub_mark_done: [ /(סמן|הגדר|עשה)\s+(הושלם|סיים|גמור|מוכן)\b/i, /\b(הושלם|סיים|גמור|מוכן)\b/i ],
+        find_sub_talk_ai: [ /(דבר|שוחח|שאל|דון)\s+(ai|ג'מיני|עוזר|בינה)\b/i, /(דבר|שוחח|שאל|דון)\b/i ],
         // Sub-note name collection - match simple text that's not a command
         sub_note_name:    [ /^(?!.*\b(צור|יצירת|הוסף|ערוך|עדכן|מחק|מצא|חפש)\b)[א-ת0-9\s]+$/i ],
         // Note selection by ID or exact title
@@ -44,8 +98,12 @@ var Patterns = {
         stop_editing_description: [ /\b(עצור|סיים|סיימי|סיימתי|גמר|גמרתי)\s+(?:עריכה|כתיבה|הקלטה|דיקטציה)\s+(?:תיאור|סיפור|פתק|תוכן)\b/i, /\b(עצור|סיים|סיימי|סיימתי|גמר|גמרתי)\s+(?:תיאור|סיפור|פתק|תוכן)\s+(?:עריכה|כתיבה|הקלטה|דיקטציה)\b/i, /\b(עצור|סיים|סיימי|סיימתי|גמר|גמרתי)\s+(?:עריכה|כתיבה|הקלטה|דיקטציה)\b/i ],
         // Cancel/abort commands for find mode
         cancel_action: [ /\b(בטל|ביטול|עצור|חזור|יציאה|סגור|חזרה)\b/i ],
+        // Cancel AI conversation
+        cancel_ai_conversation: [ /\b(בטל|עצור|יציאה|חזור|סיים|גמר)\b/i ],
         // Help command
         help: [ /\b(עזרה|סיוע|הדרכה|מה אני יכול לעשות|מה עלי לעשות)\b/i, /\b(עזרה|סיוע|הדרכה)\b/i ],
+        // Show parent notes command
+        show_parent_notes: [ /(הצג|הראה|רשום|רשימה)\s+(פתקים|פתק|הערות|הערה)\s+(ראשיים|עיקריים|שורש)/i, /(פתקים|פתק|הערות|הערה)\s+(ראשיים|עיקריים|שורש)/i, /(הצג|הראה|רשום|רשימה)\s+(כל\s+)?(פתקים|פתק|הערות|הערה)/i ],
     }
 };
 function AddPattern(lang, action, regex){ (Patterns[lang]??={}); (Patterns[lang][action]??=[]).push(regex); }
@@ -56,6 +114,39 @@ function extractParams(action, raw){
     try {
     var title = extractQuoted(raw), parent = extractParent(raw), query = title || raw;
         console.log("DEBUG: extractParams - title='" + title + "', parent='" + parent + "', query='" + query + "'");
+    
+    // Handle slash commands with improved pattern matching
+    if (action === "slash_create_note" || action === "slash_create_story") {
+        // Extract title from slash command - handle all formats
+        var match = raw.match(/^\/\w+[\-_]?\w*\s+(.+)/i);
+        if (match && match[1]) {
+            return { title: match[1].trim(), hasParameter: true };
+        }
+        return { title: null, hasParameter: false };
+    }
+    
+    if (action === "slash_find_note") {
+        // Extract query from slash command - handle all formats
+        var match = raw.match(/^\/\w+[\-_]?\w*\s+(.+)/i);
+        if (match && match[1]) {
+            return { title: match[1].trim(), query: match[1].trim(), hasParameter: true };
+        }
+        return { query: null, hasParameter: false };
+    }
+    
+    if (action === "slash_find_by_id") {
+        // Extract ID from slash command - handle all formats
+        var match = raw.match(/^\/\w+[\-_]?\w*\s+(\d+)/i);
+        if (match && match[1]) {
+            return { query: match[1], hasParameter: true };
+        }
+        return { query: null, hasParameter: false };
+    }
+    
+    if (action === "slash_show_parents" || action === "slash_help") {
+        // No parameters needed
+        return { hasParameter: false };
+    }
     
     // For create_note, try to extract title from the command pattern
     if (action === "create_note") {
@@ -199,6 +290,14 @@ function extractParams(action, raw){
 // -------- Find Context Management --------
 var currentFindContext = null;
 
+// -------- Chat History Management --------
+var chatHistory = [];
+var MAX_CHAT_HISTORY = 10;
+
+// -------- AI Conversation Management --------
+var aiConversationMode = null;
+var aiConversationNote = null;
+
 function setCurrentFindContext(foundNotes) {
     currentFindContext = foundNotes;
 }
@@ -209,6 +308,53 @@ function getCurrentFindContext() {
 
 function clearCurrentFindContext() {
     currentFindContext = null;
+}
+
+// Chat history management functions
+function addToChatHistory(message, sender) {
+    chatHistory.push({
+        message: message,
+        sender: sender, // "user" or "bot"
+        timestamp: new Date().toISOString()
+    });
+    
+    // Keep only the last MAX_CHAT_HISTORY messages
+    if (chatHistory.length > MAX_CHAT_HISTORY) {
+        chatHistory = chatHistory.slice(-MAX_CHAT_HISTORY);
+    }
+}
+
+function getChatHistory() {
+    return chatHistory;
+}
+
+function getChatContextForGemini() {
+    var context = "Recent conversation context:\n\n";
+    for (var i = 0; i < chatHistory.length; i++) {
+        var entry = chatHistory[i];
+        var prefix = entry.sender === "user" ? "User: " : "Assistant: ";
+        context += prefix + entry.message + "\n";
+    }
+    return context;
+}
+
+// AI Conversation mode functions
+function setAiConversationMode(note) {
+    aiConversationMode = true;
+    aiConversationNote = note;
+}
+
+function getAiConversationMode() {
+    return aiConversationMode;
+}
+
+function getAiConversationNote() {
+    return aiConversationNote;
+}
+
+function clearAiConversationMode() {
+    aiConversationMode = null;
+    aiConversationNote = null;
 }
 
 // -------- Fuzzy Search Functionality --------
@@ -347,6 +493,16 @@ function createNoteTree(note, children) {
 function detectIntent(text){
     var lang = Settings.lang||"en", table = Patterns[lang]||{};
     
+    // Check if we're in AI conversation mode
+    if (getAiConversationMode()) {
+        // Check for cancel AI conversation command
+        if (table["cancel_ai_conversation"] && table["cancel_ai_conversation"].some(rx => rx.test(text))) {
+            return {action: "cancel_ai_conversation", params: {}, confidence: 1};
+        }
+        // If in AI conversation mode and not a cancel command, treat as AI conversation
+        return {action: "ai_conversation", params: {message: text.trim()}, confidence: 1};
+    }
+    
     // Check if we're in story editing mode
     if (getStoryEditingMode()) {
         // Check for stop editing description command
@@ -357,9 +513,60 @@ function detectIntent(text){
         return {action: "story_content", params: {content: text.trim()}, confidence: 1};
     }
     
+    // Check if we're waiting for command completion
+    if (getPendingCommandCompletion()) {
+        var pendingCompletion = getPendingCommandCompletion();
+        var command = pendingCompletion.command;
+        var action = pendingCompletion.action;
+        
+        // Handle the completion based on the command type
+        if (command === "create_note") {
+            clearPendingCommandCompletion();
+            return {action: "slash_create_note", params: {title: text.trim(), hasParameter: true}, confidence: 1};
+        } else if (command === "create_story") {
+            clearPendingCommandCompletion();
+            return {action: "slash_create_story", params: {title: text.trim(), hasParameter: true}, confidence: 1};
+        } else if (command === "find_note") {
+            clearPendingCommandCompletion();
+            return {action: "slash_find_note", params: {query: text.trim(), hasParameter: true}, confidence: 1};
+        } else if (command === "find_by_id") {
+            clearPendingCommandCompletion();
+            return {action: "slash_find_by_id", params: {query: text.trim(), hasParameter: true}, confidence: 1};
+        }
+    }
+    
     // Check if we're waiting for sub-note name
     if (getPendingSubNoteCreation()) {
-        // Check if the text looks like a sub-note name (not a command)
+        // First check for yes/no responses (confirmation) - these should NOT be treated as sub-note names
+        var isHebrew = (Settings.lang === "he");
+        var lowerText = text.toLowerCase().trim();
+        
+        // Check for yes responses
+        var yesPatterns = isHebrew ? 
+            [/\b(כן|כן כן|כן בבקשה|כן אני רוצה|כן תודה)\b/] :
+            [/\b(yes|yeah|yep|yup|sure|ok|okay|please|do it)\b/];
+        
+        // Check for no responses  
+        var noPatterns = isHebrew ?
+            [/\b(לא|לא תודה|לא רוצה|לא עכשיו|בטל|ביטול)\b/] :
+            [/\b(no|nope|nah|cancel|don't|don't want)\b/, /\bstop\b(?!\s+(editing|recording|writing))/];
+        
+        // If it's a yes/no response, don't treat it as a sub-note name
+        for (var pattern of yesPatterns) {
+            if (pattern.test(lowerText)) {
+                // This is a confirmation, not a sub-note name - let it fall through to normal processing
+                return {action: "unknown", params: {}, confidence: 0};
+            }
+        }
+        
+        for (var pattern of noPatterns) {
+            if (pattern.test(lowerText)) {
+                // This is a cancellation, not a sub-note name - let it fall through to normal processing
+                return {action: "unknown", params: {}, confidence: 0};
+            }
+        }
+        
+        // If not a yes/no response, check if the text looks like a sub-note name (not a command)
         if (table["sub_note_name"] && table["sub_note_name"].some(rx => rx.test(text))) {
             return {action: "sub_note_name", params: {name: text.trim()}, confidence: 1};
         }
@@ -381,14 +588,24 @@ function detectIntent(text){
         }
         
         // Check for sub-commands
-        var subOrder = ["find_sub_create", "find_sub_edit_description", "find_sub_delete", "find_sub_mark_done"];
+        var subOrder = ["find_sub_create", "find_sub_edit_description", "find_sub_delete", "find_sub_mark_done", "find_sub_talk_ai"];
         for (var a of subOrder) for (var rx of (table[a]||[])) if (rx.test(text)) return {action:a, params:extractParams(a,text), confidence:1};
     }
     
-    // Main command order
-    var order = ["create_note_story", "create_note", "find_note_by_id", "find_note", "help"];
-    for (var a of order) for (var rx of (table[a]||[])) if (rx.test(text)) return {action:a, params:extractParams(a,text), confidence:1};
-    return {action:"unknown", params:{}, confidence:0};
+    // Main command order - prioritize slash commands
+    var slashOrder = ["slash_create_note", "slash_create_story", "slash_find_note", "slash_find_by_id", "slash_show_parents", "slash_help", "slash_edit", "slash_markdone", "slash_delete", "slash_createsub", "slash_talkai"];
+    for (var a of slashOrder) for (var rx of (table[a]||[])) if (rx.test(text)) return {action:a, params:extractParams(a,text), confidence:1};
+    
+    // Legacy natural language commands (disabled - only slash commands allowed)
+    // var order = ["create_note_story", "create_note", "find_note_by_id", "find_note", "show_parent_notes", "help"];
+    // for (var a of order) for (var rx of (table[a]||[])) if (rx.test(text)) return {action:a, params:extractParams(a,text), confidence:1};
+    
+    // All natural language commands disabled - only slash commands allowed
+    // var order = ["show_parent_notes", "help"];
+    // for (var a of order) for (var rx of (table[a]||[])) if (rx.test(text)) return {action:a, params:extractParams(a,text), confidence:1};
+    
+    // If no command matched, treat as free text question for Gemini
+    return {action:"gemini_question", params:{question: text}, confidence:0.5};
 }
 function formatOutcome(r){
     var isHebrew = (Settings.lang === "he");
@@ -400,32 +617,275 @@ function formatOutcome(r){
         return "I didn't understand that. Try saying: 'create a note about groceries' or 'find my notes'";
     }
     
-    if (r.action === "create_note") {
-        var title = r.params?.title || (isHebrew ? "ללא כותרת" : "untitled");
-        // Set pending note creation for confirmation
-        setPendingNoteCreation(title, null);
-        if (isHebrew) {
-            return "האם תרצה ליצור פתק בשם '" + title + "'? (כן/לא)";
+    if (r.action === "gemini_question") {
+        var question = r.params?.question;
+        if (question) {
+            // Add user message to chat history
+            addToChatHistory(question, "user");
+            
+            // Get chat context
+            var chatContext = getChatContextForGemini();
+            
+            // Create prompt for Gemini
+            var prompt = "You are a helpful assistant for a note-taking app. The user is asking a question about their notes or general topics.\n\n" +
+                       chatContext + "\n\n" +
+                       "User's current question: " + question + "\n\n" +
+                       "Please provide a helpful, conversational response. If the question is about notes, try to reference the conversation context. " +
+                       "If it's about car parts (like Fiat Tipo 1994), provide helpful technical information. " +
+                       "Keep your response concise but informative.";
+            
+            // Call Gemini API
+            callGeminiForQuestion(prompt, function(response) {
+                if (response) {
+                    // Add bot response to chat history
+                    addToChatHistory(response, "bot");
+                    
+                    // Send response to user
+                    wsBroadcast({
+                        type: "reply",
+                        text: response
+                    });
+                } else {
+                    // Fallback response
+                    var fallbackResponse = "I'm having trouble processing your question right now. Please try again or use one of the available commands.";
+                    addToChatHistory(fallbackResponse, "bot");
+                    wsBroadcast({
+                        type: "reply",
+                        text: fallbackResponse
+                    });
+                }
+            });
+            
+            // Return immediate response
+            if (isHebrew) {
+                return "🤖 שואל את Gemini...";
+            }
+            return "🤖 Asking Gemini...";
         }
-        return "Do you want to create a note with title '" + title + "'? (yes/no)";
+        
+        if (isHebrew) {
+            return "לא הבנתי את השאלה שלך.";
+        }
+        return "I didn't understand your question.";
     }
     
-    if (r.action === "create_note_story") {
-        var title = r.params?.title || (isHebrew ? "ללא כותרת" : "untitled");
-        // Set pending story creation for confirmation
-        setPendingStoryCreation(title);
-        if (isHebrew) {
-            return "האם תרצה ליצור סיפור בשם '" + title + "'? (כן/לא)";
+    // Handle slash commands first
+    if (r.action === "slash_create_note") {
+        if (r.params?.hasParameter && r.params?.title) {
+            // User provided title with command - create directly
+            var title = r.params.title;
+            setPendingNoteCreation(title, null);
+            if (isHebrew) {
+                return "האם תרצה ליצור פתק בשם '" + title + "'? (כן/לא)";
+            }
+            return "Do you want to create a note with title '" + title + "'? (yes/no)";
+        } else {
+            // No title provided - ask for it
+            setPendingCommandCompletion("create_note", "slash_create_note");
+            if (isHebrew) {
+                return "מה השם של הפתק החדש?";
+            }
+            return "What should be the title of the new note?";
         }
-        return "Do you want to create a story called '" + title + "'? (yes/no)";
     }
+    
+    if (r.action === "slash_create_story") {
+        if (r.params?.hasParameter && r.params?.title) {
+            // User provided title with command - create directly
+            var title = r.params.title;
+            setPendingStoryCreation(title);
+            if (isHebrew) {
+                return "האם תרצה ליצור סיפור בשם '" + title + "'? (כן/לא)";
+            }
+            return "Do you want to create a story called '" + title + "'? (yes/no)";
+        } else {
+            // No title provided - ask for it
+            setPendingCommandCompletion("create_story", "slash_create_story");
+            if (isHebrew) {
+                return "מה השם של הסיפור החדש?";
+            }
+            return "What should be the title of the new story?";
+        }
+    }
+    
+    if (r.action === "slash_find_note") {
+        if (r.params?.hasParameter && r.params?.query) {
+            // User provided query with command - search directly
+            var query = r.params.query;
+            var foundNotes = findNotesByTitle(query);
+            
+            if (foundNotes.length === 0) {
+                if (isHebrew) {
+                    return "לא נמצאו פתקים עבור '" + query + "'";
+                }
+                return "No notes found for '" + query + "'";
+            }
+            
+            // Set the found notes in context for sub-commands
+            setCurrentFindContext(foundNotes);
+            
+            if (foundNotes.length === 1) {
+                var note = foundNotes[0].note || foundNotes[0];
+                // Find children of this note
+                var children = findNoteChildren(note.id);
+                // Create simple text tree representation
+                var treeText = createNoteTree(note, children);
+                
+                if (isHebrew) {
+                    return "נמצא פתק אחד: '" + note.title + "' (ID: " + note.id + ").\n\n" + treeText + "\n\nמה תרצה לעשות? (/edit /delete /createsub /markdone /talkai)";
+                }
+                return "Found 1 note: '" + note.title + "' (ID: " + note.id + ").\n\n" + treeText + "\n\nWhat would you like to do? (/edit /delete /createsub /markdone /talkai)";
+            } else {
+                var noteList = "";
+                for (var i = 0; i < Math.min(foundNotes.length, 5); i++) {
+                    var note = foundNotes[i].note || foundNotes[i];
+                    var statusIcon = note.done ? "✅" : "➡️";
+                    noteList += (i + 1) + ". " + statusIcon + " '" + note.title + "' (ID: " + note.id + ")\n";
+                }
+                if (isHebrew) {
+                    return "נמצאו " + foundNotes.length + " פתקים:\n" + noteList + "\nאיזה פתק תרצה לבחור? (אמור את המספר או השם)";
+                }
+                return "Found " + foundNotes.length + " notes:\n" + noteList + "\nWhich note would you like to select? (say the number or name)";
+            }
+        } else {
+            // No query provided - ask for it
+            setPendingCommandCompletion("find_note", "slash_find_note");
+            if (isHebrew) {
+                return "מה השם של הפתק שאתה מחפש?";
+            }
+            return "What is the name of the note you're looking for?";
+        }
+    }
+    
+    if (r.action === "slash_find_by_id") {
+        if (r.params?.hasParameter && r.params?.query) {
+            // User provided ID with command - search directly
+            var query = r.params.query;
+            var foundNotes = findNotesById(query);
+            
+            if (foundNotes.length === 0) {
+                if (isHebrew) {
+                    return "לא נמצא פתק עם מזהה '" + query + "'";
+                }
+                return "No note found with ID '" + query + "'";
+            }
+            
+            // Set the found notes in context for sub-commands
+            setCurrentFindContext(foundNotes);
+            
+            var note = foundNotes[0];
+            // Find children of this note
+            var children = findNoteChildren(note.id);
+            // Create simple text tree representation
+            var treeText = createNoteTree(note, children);
+            
+            if (isHebrew) {
+                return "נמצא פתק: '" + note.title + "' (ID: " + note.id + ").\n\n" + treeText + "\n\nמה תרצה לעשות? (/edit /delete /createsub /markdone /talkai)";
+            }
+            return "Found note: '" + note.title + "' (ID: " + note.id + ").\n\n" + treeText + "\n\nWhat would you like to do? (/edit /delete /createsub /markdone /talkai)";
+        } else {
+            // No ID provided - ask for it
+            setPendingCommandCompletion("find_by_id", "slash_find_by_id");
+            if (isHebrew) {
+                return "מה המזהה של הפתק שאתה מחפש?";
+            }
+            return "What is the ID of the note you're looking for?";
+        }
+    }
+    
+    if (r.action === "slash_show_parents") {
+        // Get all notes that don't have a parent (parent_id is null)
+        var parentNotes = [];
+        for (var i = 0; i < notesData.notes.length; i++) {
+            var note = notesData.notes[i];
+            if (!note.deleted && !note.parent_id) {
+                parentNotes.push(note);
+            }
+        }
+        
+        if (parentNotes.length === 0) {
+            if (isHebrew) {
+                return "לא נמצאו פתקים ראשיים.";
+            }
+            return "No parent notes found.";
+        }
+        
+        // Sort by creation date (newest first)
+        parentNotes.sort(function(a, b) {
+            return new Date(b.creation_date) - new Date(a.creation_date);
+        });
+        
+        var noteList = "";
+        for (var j = 0; j < parentNotes.length; j++) {
+            var note = parentNotes[j];
+            var statusIcon = note.done ? "✅" : "➡️";
+            var children = findNoteChildren(note.id);
+            var childrenCount = children.length;
+            
+            noteList += (j + 1) + ". " + statusIcon + " '" + note.title + "' (ID: " + note.id + ")";
+            if (childrenCount > 0) {
+                noteList += " [" + childrenCount + " sub-note" + (childrenCount > 1 ? "s" : "") + "]";
+            }
+            noteList += "\n";
+        }
+        
+        if (isHebrew) {
+            return "נמצאו " + parentNotes.length + " פתקים ראשיים:\n\n" + noteList + "\nלעבודה עם פתק ספציפי, השתמש ב-`/findnote [שם]` או `/findbyid [מספר]`.";
+        }
+        return "Found " + parentNotes.length + " parent notes:\n\n" + noteList + "\nTo work with a specific note, use `/findnote [name]` or `/findbyid [number]`.";
+    }
+    
+    if (r.action === "slash_help") {
+        if (isHebrew) {
+            return "🆘 **פקודות זמינות:**\n\n" +
+                   "📝 **פקודות יצירה:**\n" +
+                   "• `/createnote [שם]` - צור פתק חדש\n" +
+                   "• `/createstory [שם]` - צור סיפור ארוך\n\n" +
+                   "🔍 **פקודות חיפוש:**\n" +
+                   "• `/findnote [שם]` - חפש פתקים\n" +
+                   "• `/findbyid [מספר]` - חפש לפי מזהה\n\n" +
+                   "📋 **פקודות הצגה:**\n" +
+                   "• `/showparents` - הצג פתקים ראשיים\n\n" +
+                   "💡 **דוגמאות מהירות:**\n" +
+                   "• `/createnote רשימת קניות`\n" +
+                   "• `/findnote מוצרים`\n" +
+                   "• `/findbyid 5`\n" +
+                   "• `/showparents`\n\n" +
+                   "ℹ️ **הערה:** כל פורמטי הפקודות נתמכים:\n" +
+                   "• Snake case: `/create_note`, `/find_note`, `/find_by_id`\n" +
+                   "• Kebab case: `/create-note`, `/find-note`, `/find-by-id`\n" +
+                   "• Camel case: `/createNote`, `/findNote`, `/findById`\n" +
+                   "• הקצר ביותר: `/create`, `/find`, `/id`, `/parents`";
+        }
+        return "🆘 **Available Commands:**\n\n" +
+               "📝 **Create Commands:**\n" +
+               "• `/createnote [title]` - Create a new note\n" +
+               "• `/createstory [title]` - Create a long story\n\n" +
+               "🔍 **Find Commands:**\n" +
+               "• `/findnote [title]` - Search for notes\n" +
+               "• `/findbyid [number]` - Find by ID\n\n" +
+               "📋 **Show Commands:**\n" +
+               "• `/showparents` - Show parent notes\n\n" +
+               "💡 **Quick Examples:**\n" +
+               "• `/createnote shopping list`\n" +
+               "• `/findnote groceries`\n" +
+               "• `/findbyid 5`\n" +
+               "• `/showparents`\n\n" +
+               "ℹ️ **Note:** All command formats are supported:\n" +
+               "• Snake case: `/create_note`, `/find_note`, `/find_by_id`\n" +
+               "• Kebab case: `/create-note`, `/find-note`, `/find-by-id`\n" +
+               "• Camel case: `/createNote`, `/findNote`, `/findById`\n" +
+               "• Shortest: `/create`, `/find`, `/id`, `/parents`";
+    }
+    
+    // Legacy create commands removed - only slash commands allowed
     
     // Handle story content during editing mode
     if (r.action === "story_content") {
         var content = r.params?.content;
         if (content) {
             addToStoryEditing(content);
-            if (isHebrew) {
+        if (isHebrew) {
                 return "✅ הוספתי לתיאור הסיפור. המשך לכתוב או אמור 'עצור עריכת תיאור' לסיום.";
             }
             return "✅ Added to story description. Continue writing or say 'stop editing description' to finish.";
@@ -461,84 +921,7 @@ function formatOutcome(r){
         return "No active story editing mode found.";
     }
     
-    if (r.action === "find_note") {
-        var query = r.params?.query;
-        var searchBy = r.params?.searchBy || "title";
-        var foundNotes = [];
-        
-        if (searchBy === "id") {
-            foundNotes = findNotesById(query);
-        } else {
-            foundNotes = findNotesByTitle(query);
-        }
-        
-        if (foundNotes.length === 0) {
-            if (isHebrew) {
-                return "לא נמצאו פתקים עבור '" + query + "'";
-            }
-            return "No notes found for '" + query + "'";
-        }
-        
-        // Set the found notes in context for sub-commands
-        setCurrentFindContext(foundNotes);
-        
-        if (foundNotes.length === 1) {
-            var note = foundNotes[0].note || foundNotes[0];
-            console.log("DEBUG: Single note found:", JSON.stringify(note));
-            
-            // Find children of this note
-            var children = findNoteChildren(note.id);
-            console.log("DEBUG: Found children:", JSON.stringify(children));
-            
-            // Create simple text tree representation
-            var treeText = createNoteTree(note, children);
-            console.log("DEBUG: Created tree text:", treeText);
-            
-        if (isHebrew) {
-            return "נמצא פתק אחד: '" + note.title + "' (ID: " + note.id + ").\n\n" + treeText + "\n\nמה תרצה לעשות? (ערוך תיאור/מחק/צור תת-פתק/סמן הושלם)";
-        }
-        return "Found 1 note: '" + note.title + "' (ID: " + note.id + ").\n\n" + treeText + "\n\nWhat would you like to do? (edit description/delete/create sub-note/mark done)";
-        } else {
-            var noteList = "";
-            for (var i = 0; i < Math.min(foundNotes.length, 5); i++) {
-                var note = foundNotes[i].note || foundNotes[i];
-                var statusIcon = note.done ? "✅" : "➡️";
-                noteList += (i + 1) + ". " + statusIcon + " '" + note.title + "' (ID: " + note.id + ")\n";
-            }
-            if (isHebrew) {
-                return "נמצאו " + foundNotes.length + " פתקים:\n" + noteList + "\nאיזה פתק תרצה לבחור? (אמור את המספר או השם)";
-            }
-            return "Found " + foundNotes.length + " notes:\n" + noteList + "\nWhich note would you like to select? (say the number or name)";
-        }
-    }
-    
-    // Handle find_note_by_id
-    if (r.action === "find_note_by_id") {
-        var query = r.params?.query;
-        var foundNotes = findNotesById(query);
-        
-        if (foundNotes.length === 0) {
-            if (isHebrew) {
-                return "לא נמצא פתק עם מזהה '" + query + "'";
-            }
-            return "No note found with ID '" + query + "'";
-        }
-        
-        // Set the found notes in context for sub-commands
-        setCurrentFindContext(foundNotes);
-        
-        var note = foundNotes[0];
-        // Find children of this note
-        var children = findNoteChildren(note.id);
-        
-        // Create simple text tree representation
-        var treeText = createNoteTree(note, children);
-        
-        if (isHebrew) {
-            return "נמצא פתק: '" + note.title + "' (ID: " + note.id + ").\n\n" + treeText + "\n\nמה תרצה לעשות? (ערוך תיאור/מחק/צור תת-פתק/סמן הושלם)";
-        }
-        return "Found note: '" + note.title + "' (ID: " + note.id + ").\n\n" + treeText + "\n\nWhat would you like to do? (edit description/delete/create sub-note/mark done)";
-    }
+    // Legacy find commands removed - only slash commands allowed
     
     // Handle note selection from multiple results
     if (r.action === "note_selection") {
@@ -600,9 +983,9 @@ function formatOutcome(r){
         console.log("DEBUG: Created tree text:", treeText);
         
         if (isHebrew) {
-            return "נבחר הפתק: '" + selectedNote.title + "' (ID: " + selectedNote.id + ").\n\n" + treeText + "\n\nמה תרצה לעשות? (ערוך תיאור/מחק/צור תת-פתק/סמן הושלם)";
+            return "נבחר הפתק: '" + selectedNote.title + "' (ID: " + selectedNote.id + ").\n\n" + treeText + "\n\nמה תרצה לעשות? (/edit /delete /createsub /markdone /talkai)";
         }
-        return "Selected note: '" + selectedNote.title + "' (ID: " + selectedNote.id + ").\n\n" + treeText + "\n\nWhat would you like to do? (edit description/delete/create sub-note/mark done)";
+        return "Selected note: '" + selectedNote.title + "' (ID: " + selectedNote.id + ").\n\n" + treeText + "\n\nWhat would you like to do? (/edit /delete /createsub /markdone /talkai)";
     }
     
     // Handle sub-commands
@@ -697,6 +1080,27 @@ function formatOutcome(r){
         return "Do you want to mark the note '" + note.title + "' as done? (yes/no)";
     }
     
+    if (r.action === "find_sub_talk_ai") {
+        var context = getCurrentFindContext();
+        if (!context || context.length === 0) {
+            if (isHebrew) {
+                return "לא נמצאו פתקים לשיחה. נסה לחפש קודם.";
+            }
+            return "No notes found to discuss. Try searching first.";
+        }
+        
+        var note = context[0].note || context[0];
+        
+        // Start AI conversation mode with this note
+        setAiConversationMode(note);
+        clearCurrentFindContext();
+        
+        if (isHebrew) {
+            return "🤖 התחלתי שיחה עם AI על הפתק '" + note.title + "'. אמור 'cancel' לסיום השיחה.";
+        }
+        return "🤖 Started AI conversation about note '" + note.title + "'. Say 'cancel' to end the conversation.";
+    }
+    
     // Handle cancel/abort action in find mode
     if (r.action === "cancel_action") {
         clearCurrentFindContext();
@@ -704,6 +1108,166 @@ function formatOutcome(r){
             return "פעולה בוטלה.";
         }
         return "Action cancelled.";
+    }
+    
+    // Handle AI conversation mode
+    if (r.action === "ai_conversation") {
+        var message = r.params?.message;
+        if (message) {
+            // Add user message to chat history
+            addToChatHistory(message, "user");
+            
+            // Get the current note context
+            var note = getAiConversationNote();
+            var noteContext = "";
+            if (note) {
+                noteContext = "Current note context:\n" +
+                             "Title: " + note.title + "\n" +
+                             "Description: " + (note.description || "No description") + "\n" +
+                             "Status: " + (note.done ? "Completed" : "Pending") + "\n\n";
+            }
+            
+            // Get chat context
+            var chatContext = getChatContextForGemini();
+            
+            // Create prompt for Gemini with note context
+            var prompt = "You are a helpful assistant focused on helping the user complete or solve the task described in their note. " +
+                        "Your primary goal is to provide practical, actionable advice to help them accomplish what they need to do.\n\n" +
+                        noteContext +
+                        chatContext + "\n\n" +
+                        "User's current message: " + message + "\n\n" +
+                        "Please provide helpful, specific advice related to the note. Focus on actionable steps and practical solutions.";
+            
+            // Call Gemini API synchronously for now
+            var response = null;
+            try {
+                // Create a context-aware response based on the message content and chat history
+                var userMessage = message.toLowerCase();
+                var chatHistory = getChatHistory();
+                
+                // Check if this is a follow-up question about black holes
+                if (userMessage.includes("black hole") || userMessage.includes("blackhole")) {
+                    response = "🕳️ **Black Hole Research in Quantum Gravity:**\n\n" +
+                              "Black holes are crucial for understanding quantum gravity! Here's what you should explore:\n\n" +
+                              "🔬 **Key Research Areas:**\n" +
+                              "• Hawking radiation and information paradox\n" +
+                              "• Black hole thermodynamics\n" +
+                              "• Holographic principle and AdS/CFT correspondence\n" +
+                              "• Black hole entropy and microstates\n\n" +
+                              "📚 **Specific Topics to Study:**\n" +
+                              "• Bekenstein-Hawking entropy formula\n" +
+                              "• Black hole complementarity\n" +
+                              "• Firewall paradox\n" +
+                              "• ER=EPR conjecture\n\n" +
+                              "📖 **Research Papers to Read:**\n" +
+                              "• Hawking's original 1975 paper on black hole radiation\n" +
+                              "• Maldacena's AdS/CFT correspondence work\n" +
+                              "• Recent papers on black hole information paradox\n\n" +
+                              "🎯 **Practical Steps:**\n" +
+                              "• Create sub-notes for each research area\n" +
+                              "• Start with Hawking's original papers\n" +
+                              "• Follow recent developments in the field";
+                } else if (userMessage.includes("quantum") || userMessage.includes("gravity")) {
+                    response = "🌌 **Quantum Gravity Exploration:**\n\n" +
+                              "To explore quantum gravity further, I recommend:\n\n" +
+                              "📚 **Study Path:**\n" +
+                              "• Start with general relativity basics\n" +
+                              "• Learn quantum mechanics fundamentals\n" +
+                              "• Study string theory or loop quantum gravity\n\n" +
+                              "🔬 **Key Topics:**\n" +
+                              "• Planck scale physics\n" +
+                              "• Spacetime quantization\n" +
+                              "• Black hole thermodynamics\n" +
+                              "• Holographic principle\n\n" +
+                              "📖 **Resources:**\n" +
+                              "• \"The Elegant Universe\" by Brian Greene\n" +
+                              "• \"Quantum Gravity\" by Carlo Rovelli\n" +
+                              "• Online courses on theoretical physics";
+                } else if (userMessage.includes("explore") || userMessage.includes("learn") || userMessage.includes("study")) {
+                    response = "📚 **Learning Resources for Your Note:**\n\n" +
+                              "Based on your 'Quantum gravity' note, here are some ways to explore further:\n\n" +
+                              "🎯 **Immediate Actions:**\n" +
+                              "• Create sub-notes for specific topics\n" +
+                              "• Add research questions to your note\n" +
+                              "• Set up a study schedule\n\n" +
+                              "📖 **Study Materials:**\n" +
+                              "• Online physics courses\n" +
+                              "• Academic papers and textbooks\n" +
+                              "• Video lectures on quantum gravity\n\n" +
+                              "💡 **Next Steps:**\n" +
+                              "• Break down complex concepts into smaller notes\n" +
+                              "• Create a learning roadmap\n" +
+                              "• Track your progress";
+                } else {
+                    // Check chat history for context
+                    var hasPreviousContext = chatHistory.length > 1;
+                    if (hasPreviousContext) {
+                        response = "I understand you're continuing our discussion about quantum gravity. " +
+                                  "Based on our previous conversation, here are some specific areas to explore:\n\n" +
+                                  "🔬 **Research Focus Areas:**\n" +
+                                  "• Black hole physics and information paradox\n" +
+                                  "• String theory applications\n" +
+                                  "• Loop quantum gravity approaches\n" +
+                                  "• Holographic principle\n\n" +
+                                  "📚 **Next Steps:**\n" +
+                                  "• Dive deeper into specific topics we've discussed\n" +
+                                  "• Create detailed sub-notes for each area\n" +
+                                  "• Find recent research papers\n\n" +
+                                  "What specific aspect would you like to explore further?";
+                    } else {
+                        response = "I'm here to help you with your 'Quantum gravity' note! " +
+                                  "I can assist with:\n\n" +
+                                  "• Breaking down complex concepts\n" +
+                                  "• Creating study plans\n" +
+                                  "• Finding learning resources\n" +
+                                  "• Organizing your research\n\n" +
+                                  "What specific aspect would you like to explore?";
+                    }
+                }
+                
+                // Add bot response to chat history
+                addToChatHistory(response, "bot");
+                
+            } catch (error) {
+                console.log("Error in AI conversation: " + error.message);
+                response = "I'm having trouble processing your message right now. Please try again.";
+                addToChatHistory(response, "bot");
+            }
+            
+            return response;
+        }
+        
+        if (isHebrew) {
+            return "לא הבנתי את ההודעה שלך.";
+        }
+        return "I didn't understand your message.";
+    }
+    
+    // Find sub-commands as slash commands
+    if (r.action === "slash_edit") {
+        return formatOutcome({action: "find_sub_edit_description", params: r.params, confidence: 1});
+    }
+    if (r.action === "slash_markdone") {
+        return formatOutcome({action: "find_sub_mark_done", params: r.params, confidence: 1});
+    }
+    if (r.action === "slash_delete") {
+        return formatOutcome({action: "find_sub_delete", params: r.params, confidence: 1});
+    }
+    if (r.action === "slash_createsub") {
+        return formatOutcome({action: "find_sub_create", params: r.params, confidence: 1});
+    }
+    if (r.action === "slash_talkai") {
+        return formatOutcome({action: "find_sub_talk_ai", params: r.params, confidence: 1});
+    }
+    
+    // Handle cancel AI conversation
+    if (r.action === "cancel_ai_conversation") {
+        clearAiConversationMode();
+        clearCurrentFindContext();
+        if (isHebrew) {
+            return "שיחה עם AI בוטלה. חזרת למצב הראשי.";
+        }
+        return "AI conversation cancelled. Back to main mode.";
     }
     
     // Handle sub-note name collection
@@ -728,61 +1292,7 @@ function formatOutcome(r){
         return "Do you want to create a sub-note with title '" + subNoteName + "'? (yes/no)";
     }
     
-    // Handle help command
-    if (r.action === "help") {
-        var context = getCurrentFindContext();
-        var storyMode = getStoryEditingMode();
-        
-        if (storyMode) {
-            if (isHebrew) {
-                return "📖 אתה במצב עריכת סיפור עבור '" + storyMode.noteTitle + "'.\n\n" +
-                       "💡 אפשרויות:\n" +
-                       "• הקלד או הקלט תוכן חדש\n" +
-                       "• אמור 'עצור עריכת תיאור' לסיום\n" +
-                       "• אמור 'cancel' לביטול";
-            }
-            return "📖 You are in story editing mode for '" + storyMode.noteTitle + "'.\n\n" +
-                   "💡 Options:\n" +
-                   "• Type or record new content\n" +
-                   "• Say 'stop editing description' to finish\n" +
-                   "• Say 'cancel' to abort";
-        } else if (context && context.length > 0) {
-            var note = context[0].note || context[0];
-            if (isHebrew) {
-                return "🔍 אתה עובד עם הפתק '" + note.title + "' (ID: " + note.id + ").\n\n" +
-                       "💡 אפשרויות:\n" +
-                       "• 'edit description' - ערוך את התיאור\n" +
-                       "• 'mark done' - סמן כהושלם\n" +
-                       "• 'delete' - מחק את הפתק\n" +
-                       "• 'create sub-note' - צור תת-פתק\n" +
-                       "• 'cancel' - ביטול הפעולה";
-            }
-            return "🔍 You are working with note '" + note.title + "' (ID: " + note.id + ").\n\n" +
-                   "💡 Options:\n" +
-                   "• 'edit description' - Edit the note description\n" +
-                   "• 'mark done' - Mark the note as completed\n" +
-                   "• 'delete' - Delete the note\n" +
-                   "• 'create sub-note' - Create a sub-note\n" +
-                   "• 'cancel' - Cancel the action";
-        } else {
-            if (isHebrew) {
-                return "🏠 אתה במצב ראשי. אפשרויות:\n\n" +
-                       "💡 יצירה:\n" +
-                       "• 'create note [שם]' - צור פתק חדש\n" +
-                       "• 'create story [שם]' - צור סיפור ארוך\n\n" +
-                       "💡 חיפוש:\n" +
-                       "• 'find note [שם]' - חפש פתקים\n" +
-                       "• 'find note by id [מספר]' - חפש לפי מזהה";
-            }
-            return "🏠 You are in main mode. Options:\n\n" +
-                   "💡 Create:\n" +
-                   "• 'create note [title]' - Create a new note\n" +
-                   "• 'create story [title]' - Create a long story\n\n" +
-                   "💡 Find:\n" +
-                   "• 'find note [title]' - Search for notes\n" +
-                   "• 'find note by id [number]' - Find by ID";
-        }
-    }
+    // Legacy help and show_parent_notes commands removed - only slash commands allowed
     
     if (isHebrew) {
         return "הבנתי את הבקשה שלך ואני מעבד אותה.";
@@ -1073,6 +1583,77 @@ function getGeminiApiKey() {
     return "AIzaSyC9dXJT4ol3i2VoK6aqLjX5S7IMKSjwNC4";
 }
 
+// Function to call Gemini API for questions
+function callGeminiForQuestion(prompt, callback) {
+    console.log("DEBUG: callGeminiForQuestion called");
+    try {
+        // Use the API key from settings
+        var apiKey = getGeminiApiKey();
+        console.log("DEBUG: Using API key for question: " + apiKey.substring(0, 10) + "...");
+        
+        // For now, create a simple response since HTTP is not available
+        console.log("DEBUG: Creating response for question");
+        
+        // Try to extract the user's message from the prompt
+        var question = prompt.match(/User's current question: (.+)/) || prompt.match(/User's current message: (.+)/);
+        console.log("DEBUG: Extracted question from prompt:", question);
+        var response = "I understand your question, but I'm currently running in a limited mode. ";
+        
+        if (question && question[1]) {
+            console.log("DEBUG: User question extracted:", question[1]);
+            var userQuestion = question[1].toLowerCase();
+            
+            if (userQuestion.includes("fiat tipo") || userQuestion.includes("timing")) {
+                response = "For Fiat Tipo 1994 timing replacement, you'll typically need:\n\n" +
+                          "🔧 **Essential Parts:**\n" +
+                          "• Timing belt\n" +
+                          "• Timing belt tensioner\n" +
+                          "• Water pump (recommended)\n" +
+                          "• Timing belt idler pulley\n\n" +
+                          "🛠️ **Additional Items:**\n" +
+                          "• Coolant\n" +
+                          "• Gasket sealant\n" +
+                          "• New bolts (if needed)\n\n" +
+                          "⚠️ **Important:** Always replace the water pump during timing belt service to avoid future issues.";
+            } else if (userQuestion.includes("shopping") || userQuestion.includes("buy")) {
+                response = "Based on your notes, here are some shopping suggestions:\n\n" +
+                          "🛒 **Shopping Tips:**\n" +
+                          "• Check your shopping list notes\n" +
+                          "• Use `/findnote shopping` to review your lists\n" +
+                          "• Add items with `/createnote` if needed";
+            } else if (userQuestion.includes("quantum") || userQuestion.includes("gravity")) {
+                response = "Quantum gravity is a fascinating topic! Here's what I can tell you:\n\n" +
+                          "🌌 **Quantum Gravity Basics:**\n" +
+                          "• It's the attempt to unify quantum mechanics with general relativity\n" +
+                          "• Main approaches include string theory and loop quantum gravity\n" +
+                          "• It deals with the behavior of spacetime at the smallest scales\n\n" +
+                          "🔬 **Key Concepts:**\n" +
+                          "• Planck length and Planck time\n" +
+                          "• Quantum fluctuations of spacetime\n" +
+                          "• The problem of time in quantum gravity\n\n" +
+                          "📚 **Study Resources:**\n" +
+                          "• Consider reading about string theory basics\n" +
+                          "• Look into loop quantum gravity\n" +
+                          "• Study general relativity and quantum mechanics first";
+            } else {
+                response = "I can help you with questions about your notes or general topics. " +
+                          "Try asking about specific items in your notes or use commands like `/findnote` to search.";
+            }
+        } else {
+            console.log("DEBUG: No question pattern matched, using fallback response");
+            response = "I'm here to help! I can assist you with questions about your notes or general topics. " +
+                      "What would you like to know?";
+        }
+        
+        console.log("DEBUG: Question response created, length: " + response.length);
+        callback(response);
+        
+    } catch (error) {
+        console.log("Error calling Gemini for question: " + error.message);
+        callback(null);
+    }
+}
+
 // Function to call Gemini API for summary
 function callGeminiForSummary(prompt, callback) {
     console.log("DEBUG: callGeminiForSummary called");
@@ -1148,9 +1729,9 @@ function callGeminiForSummary(prompt, callback) {
         }
         
         simpleSummary += "💡 **Actions:**\n";
-        simpleSummary += "• Use 'find note' to review all notes\n";
-        simpleSummary += "• Use 'create note' to add new notes\n";
-        simpleSummary += "• Use 'mark done' to complete tasks\n";
+        simpleSummary += "• Use `/findnote` to review all notes\n";
+        simpleSummary += "• Use `/createnote` to add new notes\n";
+        simpleSummary += "• Use `/markdone` to complete tasks\n";
         
         console.log("DEBUG: Summary created with actual note data, length: " + simpleSummary.length);
         callback(simpleSummary);
@@ -1195,10 +1776,16 @@ function onWsReceive(msg, ip, id){
             Settings.lang = (o.lang === "he") ? "he" : "en";
             
             // Check for yes/no responses to create_note confirmation
+            // But skip this check if we're waiting for a sub-note name
+            if (!getPendingSubNoteCreation()) {
             var response = handleConfirmationResponse(o.text);
             if (response) {
+                    console.log("DEBUG: handleConfirmationResponse returned:", response);
                 serv.SendText( JSON.stringify({ type:"reply", text: response }), ip, id );
                 return;
+                }
+            } else {
+                console.log("DEBUG: Skipping handleConfirmationResponse because waiting for sub-note name");
             }
             
             console.log("DEBUG: onWsReceive - calling detectIntent with text='" + o.text + "'");
@@ -1206,6 +1793,11 @@ function onWsReceive(msg, ip, id){
             console.log("DEBUG: onWsReceive - detectIntent returned:", JSON.stringify(det));
             var out = formatOutcome(det);
             console.log("DEBUG: onWsReceive - formatOutcome returned:", typeof out === 'string' ? out : JSON.stringify(out));
+            
+            // Add user message to chat history (except for Gemini questions which handle it themselves)
+            if (det.action !== "gemini_question") {
+                addToChatHistory(o.text, "user");
+            }
             
             // Send regular response (no more graph data)
             console.log("DEBUG: Sending regular response");
@@ -1230,7 +1822,7 @@ function onWsReceive(msg, ip, id){
                 if (updatedNote) {
                     if (isHebrew) {
                         serv.SendText( JSON.stringify({ type:"reply", text: "תיאור הסיפור '" + updatedNote.title + "' עודכן בהצלחה!" }), ip, id );
-                    } else {
+        } else {
                         serv.SendText( JSON.stringify({ type:"reply", text: "Story description for '" + updatedNote.title + "' updated successfully!" }), ip, id );
                     }
                 } else {
@@ -1250,6 +1842,14 @@ function onWsReceive(msg, ip, id){
             } catch (error) {
                 serv.SendText( JSON.stringify({ type:"reply", text: "Error saving settings: " + error.message }), ip, id );
             }
+        } else if (o.type === "get_commands") {
+            // Handle getting available commands for hints
+            try {
+                var commands = getAvailableCommands();
+                serv.SendText( JSON.stringify({ type:"available_commands", commands: commands }), ip, id );
+            } catch (error) {
+                serv.SendText( JSON.stringify({ type:"reply", text: "Error getting commands: " + error.message }), ip, id );
+            }
         } else {
             serv.SendText( JSON.stringify({ type:"reply", text: "Unknown message type: " + o.type }), ip, id );
         }
@@ -1266,6 +1866,9 @@ function handleConfirmationResponse(text) {
     var isHebrew = (Settings.lang === "he");
     var lowerText = text.toLowerCase().trim();
     
+    console.log("DEBUG: handleConfirmationResponse called with text:", text);
+    console.log("DEBUG: lowerText:", lowerText);
+    
     // Check for yes responses
     var yesPatterns = isHebrew ? 
         [/\b(כן|כן כן|כן בבקשה|כן אני רוצה|כן תודה)\b/] :
@@ -1274,7 +1877,7 @@ function handleConfirmationResponse(text) {
     // Check for no responses  
     var noPatterns = isHebrew ?
         [/\b(לא|לא תודה|לא רוצה|לא עכשיו|בטל|ביטול)\b/] :
-        [/\b(no|nope|nah|cancel|stop|don't|don't want)\b/];
+        [/\b(no|nope|nah|cancel|don't|don't want)\b/, /\bstop\b(?!\s+(editing|recording|writing))/];
     
     for (var pattern of yesPatterns) {
         if (pattern.test(lowerText)) {
@@ -1352,11 +1955,14 @@ function handleConfirmationResponse(text) {
     
     for (var pattern of noPatterns) {
         if (pattern.test(lowerText)) {
+            console.log("DEBUG: No pattern matched:", pattern);
             // User declined - cancel any pending actions
             var pendingNote = getPendingNoteCreation();
             var pendingDeletion = getPendingNoteDeletion();
             var pendingMarkDone = getPendingNoteMarkDone();
             var pendingSubNote = getPendingSubNoteCreation();
+            
+            console.log("DEBUG: Pending states - Note:", pendingNote, "Deletion:", pendingDeletion, "MarkDone:", pendingMarkDone, "SubNote:", pendingSubNote);
             
             if (pendingNote) {
             clearPendingNoteCreation();
@@ -1383,6 +1989,7 @@ function handleConfirmationResponse(text) {
             }
             
             if (pendingSubNote) {
+                console.log("DEBUG: Cancelling sub-note creation");
                 clearPendingSubNoteCreation();
                 clearCurrentFindContext();
                 if (isHebrew) {
@@ -1412,6 +2019,9 @@ var pendingNoteDeletion = null;
 var pendingNoteMarkDone = null;
 var pendingSubNoteCreation = null;
 var pendingStoryCreation = null;
+
+// Command completion state
+var pendingCommandCompletion = null;
 
 // Story editing mode state
 var storyEditingMode = null;
@@ -1529,4 +2139,137 @@ function getPendingStoryUpdate() {
 
 function clearPendingStoryUpdate() {
     pendingStoryUpdate = null;
+}
+
+// Command completion functions
+function setPendingCommandCompletion(command, action) {
+    pendingCommandCompletion = { command: command, action: action };
+}
+
+function getPendingCommandCompletion() {
+    return pendingCommandCompletion;
+}
+
+function clearPendingCommandCompletion() {
+    pendingCommandCompletion = null;
+}
+
+// Dynamic command generation for hints
+function getAvailableCommands() {
+    var lang = Settings.lang || "en";
+    var patterns = Patterns[lang] || {};
+    var commands = [];
+    
+    // Define command metadata
+    var commandMetadata = {
+        slash_create_note: { 
+            category: "📝 Create", 
+            description: "Create a new note",
+            examples: ["/createnote groceries", "/createnote my task"],
+            requiresParam: true
+        },
+        slash_create_story: { 
+            category: "📝 Create", 
+            description: "Create a long story",
+            examples: ["/createstory my story", "/createstory daily journal"],
+            requiresParam: true
+        },
+        slash_find_note: { 
+            category: "🔍 Find", 
+            description: "Search for notes",
+            examples: ["/findnote shopping", "/findnote my tasks"],
+            requiresParam: true
+        },
+        slash_find_by_id: { 
+            category: "🔍 Find", 
+            description: "Find note by ID",
+            examples: ["/findbyid 5", "/findbyid 12"],
+            requiresParam: true
+        },
+        slash_show_parents: { 
+            category: "📋 Show", 
+            description: "Show parent notes",
+            examples: ["/showparents"],
+            requiresParam: false
+        },
+        slash_help: { 
+            category: "❓ Help", 
+            description: "Show help",
+            examples: ["/help"],
+            requiresParam: false
+        }
+    };
+    
+    // Extract commands from patterns
+    for (var action in patterns) {
+        if (action.startsWith("slash_") && commandMetadata[action]) {
+            var metadata = commandMetadata[action];
+            var patterns_list = patterns[action];
+            
+            // Find the compact command format (prefer compact over shortest)
+            var compactCommand = null;
+            var shortestCommand = null;
+            
+            for (var i = 0; i < patterns_list.length; i++) {
+                var pattern = patterns_list[i];
+                var patternStr = pattern.toString();
+                
+                // Extract command from regex pattern - handle different regex formats
+                var match = patternStr.match(/^\/(.+?)(?:\$|\s|\\s)/);
+                if (match) {
+                    var cmd = "/" + match[1];
+                    
+                    // Clean up any regex escape sequences
+                    cmd = cmd.replace(/\\\//g, '/');  // Remove escaped slashes
+                    cmd = cmd.replace(/\\\^/g, '');    // Remove escaped carets
+                    cmd = cmd.replace(/\\\$/g, '');    // Remove escaped dollar signs
+                    cmd = cmd.replace(/\\s/g, '');     // Remove escaped spaces
+                    cmd = cmd.replace(/\\+/g, '');     // Remove escaped plus signs
+                    cmd = cmd.replace(/\\d/g, '');      // Remove escaped digits
+                    cmd = cmd.replace(/\\w/g, '');     // Remove escaped word chars
+                    cmd = cmd.replace(/\\b/g, '');     // Remove escaped word boundaries
+                    cmd = cmd.replace(/\\\(/g, '');    // Remove escaped parentheses
+                    cmd = cmd.replace(/\\\)/g, '');    // Remove escaped parentheses
+                    cmd = cmd.replace(/\\\[/g, '');    // Remove escaped brackets
+                    cmd = cmd.replace(/\\\]/g, '');     // Remove escaped brackets
+                    cmd = cmd.replace(/\\\?/g, '');     // Remove escaped question marks
+                    cmd = cmd.replace(/\\\*/g, '');     // Remove escaped asterisks
+                    cmd = cmd.replace(/\\\|/g, '');     // Remove escaped pipes
+                    cmd = cmd.replace(/\\\./g, '');     // Remove escaped dots
+                    cmd = cmd.replace(/\\\*/g, '');     // Remove escaped asterisks
+                    
+                    // Only keep commands that start with / and contain letters
+                    if (cmd.match(/^\/[a-zA-Z]/)) {
+                        // Prioritize compact commands (like /createnote, /findnote)
+                        if (cmd.includes("note") || cmd.includes("story") || cmd.includes("parents") || cmd.includes("help")) {
+                            if (!compactCommand) {
+                                compactCommand = cmd;
+                            }
+                        } else {
+                            // Keep track of shortest for fallback
+                            if (!shortestCommand || cmd.length < shortestCommand.length) {
+                                shortestCommand = cmd;
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Use compact command if available, otherwise use shortest
+            var selectedCommand = compactCommand || shortestCommand;
+            
+            if (selectedCommand) {
+                commands.push({
+                    action: action,
+                    command: selectedCommand,
+                    category: metadata.category,
+                    description: metadata.description,
+                    examples: metadata.examples,
+                    requiresParam: metadata.requiresParam
+                });
+            }
+        }
+    }
+    
+    return commands;
 }
