@@ -275,6 +275,52 @@ var CommandRouter = {
             }
         }
         
+        // Check for confirmation responses when there are pending states
+        var pendingNote = StateManager.getPendingNoteCreation();
+        var pendingStory = StateManager.getPendingStoryCreation();
+        var pendingDeletion = StateManager.getPendingNoteDeletion();
+        var pendingMarkDone = StateManager.getPendingNoteMarkDone();
+        var pendingSubNote = StateManager.getPendingSubNoteCreation();
+        var pendingUpdate = StateManager.getPendingStoryUpdate();
+        
+        console.log("DEBUG: detectIntent - checking for confirmation responses");
+        console.log("DEBUG: detectIntent - pending states - Note:", pendingNote, "Story:", pendingStory, "Deletion:", pendingDeletion, "MarkDone:", pendingMarkDone, "SubNote:", pendingSubNote, "Update:", pendingUpdate);
+        
+        if (pendingNote || pendingStory || pendingDeletion || pendingMarkDone || pendingSubNote || pendingUpdate) {
+            console.log("DEBUG: detectIntent - found pending states, checking for confirmation patterns");
+            // Check for yes/no responses
+            var isHebrew = (lang === "he");
+            var lowerText = text.toLowerCase().trim();
+            
+            // Check for yes responses
+            var yesPatterns = isHebrew ? 
+                [/\b(כן|כן כן|כן בבקשה|כן אני רוצה|כן תודה)\b/] :
+                [/\b(yes|yeah|yep|yup|sure|ok|okay|please|do it)\b/];
+            
+            // Check for no responses  
+            var noPatterns = isHebrew ?
+                [/\b(לא|לא תודה|לא רוצה|לא עכשיו|בטל|ביטול)\b/] :
+                [/\b(no|nope|nah|cancel|don't|don't want)\b/, /\bstop\b(?!\s+(editing|recording|writing))/];
+            
+            for (var pattern of yesPatterns) {
+                console.log("DEBUG: detectIntent - testing yes pattern:", pattern, "against text:", lowerText);
+                if (pattern.test(lowerText)) {
+                    console.log("DEBUG: detectIntent - yes pattern matched!");
+                    return {action: "confirmation_yes", params: {text: text}, confidence: 1};
+                }
+            }
+            
+            for (var pattern of noPatterns) {
+                console.log("DEBUG: detectIntent - testing no pattern:", pattern, "against text:", lowerText);
+                if (pattern.test(lowerText)) {
+                    console.log("DEBUG: detectIntent - no pattern matched!");
+                    return {action: "confirmation_no", params: {text: text}, confidence: 1};
+                }
+            }
+            
+            console.log("DEBUG: detectIntent - no confirmation patterns matched");
+        }
+        
         // If no command matched, treat as free text question for Gemini
         return {action:"gemini_question", params:{question: text}, confidence:0.5};
     },

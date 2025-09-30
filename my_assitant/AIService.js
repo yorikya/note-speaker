@@ -75,6 +75,14 @@ var AIService = {
             console.log("DEBUG: Extracted question from prompt:", question);
             var response = "I understand your question, but I'm currently running in a limited mode. ";
             
+            // Extract note context from the prompt
+            var noteContext = "";
+            var contextMatch = prompt.match(/📝 \*\*Note: (.+?)\*\*/);
+            if (contextMatch) {
+                noteContext = contextMatch[1];
+                console.log("DEBUG: Note context extracted:", noteContext);
+            }
+            
             if (question && question[1]) {
                 console.log("DEBUG: User question extracted:", question[1]);
                 var userQuestion = question[1];

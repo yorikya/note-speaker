@@ -97,6 +97,16 @@ var WebSocketHandler = {
         Settings.lang = (o.lang === "he") ? "he" : "en";
         
         console.log("DEBUG: onWsReceive - calling detectIntent with text='" + o.text + "'");
+        
+        // Debug: Check pending states before detectIntent
+        var pendingNote = StateManager.getPendingNoteCreation();
+        var pendingStory = StateManager.getPendingStoryCreation();
+        var pendingDeletion = StateManager.getPendingNoteDeletion();
+        var pendingMarkDone = StateManager.getPendingNoteMarkDone();
+        var pendingSubNote = StateManager.getPendingSubNoteCreation();
+        var pendingUpdate = StateManager.getPendingStoryUpdate();
+        console.log("DEBUG: Pending states before detectIntent - Note:", pendingNote, "Story:", pendingStory, "Deletion:", pendingDeletion, "MarkDone:", pendingMarkDone, "SubNote:", pendingSubNote, "Update:", pendingUpdate);
+        
         var det = CommandRouter.detectIntent(o.text, Settings);
         console.log("DEBUG: onWsReceive - detectIntent returned:", JSON.stringify(det));
         
@@ -111,12 +121,13 @@ var WebSocketHandler = {
         }
         
         // Handle other commands that set pending states
-        if (det.action === "slash_createnote" && det.params?.hasParameter && det.params?.title) {
+        console.log("DEBUG: Checking slash_createnote - action:", det.action, "hasParameter:", det.params?.hasParameter, "title:", det.params?.title);
+        if (det.action === "slash_create_note" && det.params?.hasParameter && det.params?.title) {
             StateManager.setPendingNoteCreation(det.params.title, null);
             console.log("DEBUG: Set pending note creation for title:", det.params.title);
         }
         
-        if (det.action === "slash_createstory" && det.params?.hasParameter && det.params?.title) {
+        if (det.action === "slash_create_story" && det.params?.hasParameter && det.params?.title) {
             StateManager.setPendingStoryCreation(det.params.title);
             console.log("DEBUG: Set pending story creation for title:", det.params.title);
         }
@@ -195,6 +206,25 @@ var WebSocketHandler = {
         if (det.action === "slash_selectsubnote") {
             // No state setting needed for selectsubnote - it's handled in formatOutcome
             console.log("DEBUG: Processing slash_selectsubnote command");
+        }
+        
+        // Handle confirmation responses
+        if (det.action === "confirmation_yes") {
+            var response = this.handleConfirmationResponse(o.text);
+            if (response) {
+                console.log("DEBUG: handleConfirmationResponse returned:", response);
+                this.sendToClient({ type: "reply", text: response }, ip, id);
+                return;
+            }
+        }
+        
+        if (det.action === "confirmation_no") {
+            var response = this.handleConfirmationResponse(o.text);
+            if (response) {
+                console.log("DEBUG: handleConfirmationResponse returned:", response);
+                this.sendToClient({ type: "reply", text: response }, ip, id);
+                return;
+            }
         }
         
         // Check for yes/no responses to confirmations AFTER setting pending states
@@ -285,6 +315,13 @@ var WebSocketHandler = {
         
         console.log("DEBUG: handleConfirmationResponse called with text:", text);
         console.log("DEBUG: lowerText:", lowerText);
+        
+        // Debug: Check what pending states exist
+        var pendingNote = StateManager.getPendingNoteCreation();
+        var pendingStory = StateManager.getPendingStoryCreation();
+        var pendingDeletion = StateManager.getPendingNoteDeletion();
+        var pendingMarkDone = StateManager.getPendingNoteMarkDone();
+        console.log("DEBUG: Pending states - Note:", pendingNote, "Story:", pendingStory, "Deletion:", pendingDeletion, "MarkDone:", pendingMarkDone);
         
         // Check for yes responses
         var yesPatterns = isHebrew ? 
@@ -568,6 +605,16 @@ var WebSocketHandler = {
         // Determine current context
         var currentContext = "main"; // Default
         
+        console.log("DEBUG: getAvailableCommands - checking context conditions:");
+        console.log("DEBUG: - storyEditingMode:", storyEditingMode);
+        console.log("DEBUG: - aiConversationMode:", aiConversationMode);
+        console.log("DEBUG: - pendingNoteCreation:", pendingNoteCreation);
+        console.log("DEBUG: - pendingNoteDeletion:", pendingNoteDeletion);
+        console.log("DEBUG: - pendingNoteMarkDone:", pendingNoteMarkDone);
+        console.log("DEBUG: - pendingSubNoteCreation:", pendingSubNoteCreation);
+        console.log("DEBUG: - pendingStoryCreation:", pendingStoryCreation);
+        console.log("DEBUG: - currentFindContext:", currentFindContext);
+        
         if (storyEditingMode) {
             currentContext = "story_editing";
         } else if (aiConversationMode) {
@@ -609,6 +656,7 @@ var WebSocketHandler = {
                     
                     var command = commandMap[action];
                     if (command) {
+                        console.log("DEBUG: Adding command:", command, "for action:", action, "in context:", currentContext);
                         commands.push({
                             action: action,
                             command: command,
@@ -1319,6 +1367,18 @@ var WebSocketHandler = {
                 return "✅ בוטל. חזרתי למצב רגיל.";
             }
             return "✅ Cancelled. Back to normal mode.";
+        }
+        
+        if (r.action === "confirmation_yes") {
+            // This should be handled in handleChatMessage, but just in case
+            var response = this.handleConfirmationResponse(r.params?.text || "yes");
+            return response || "Confirmation processed.";
+        }
+        
+        if (r.action === "confirmation_no") {
+            // This should be handled in handleChatMessage, but just in case
+            var response = this.handleConfirmationResponse(r.params?.text || "no");
+            return response || "Cancellation processed.";
         }
         
         if (r.action === "unknown_slash_command") {
