@@ -135,6 +135,14 @@
     </div>
     
     <div style="margin-top:20px;">
+      <h3>Chat History</h3>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <button id="clearChatHistory" class="secondary" style="background:#ff6b35;">🗑️ Clear Chat History</button>
+        <small style="color:#a0a0a0; font-size:12px;">Clear all chat messages and history</small>
+      </div>
+    </div>
+    
+    <div style="margin-top:20px;">
       <h3>Debug Tools</h3>
       <div style="display:flex; flex-direction:column; gap:8px;">
         <button id="showNotes">Show Notes (Debug)</button>
@@ -210,6 +218,7 @@ const apiStatus = document.getElementById("apiStatus");
 const showNotes = document.getElementById("showNotes");
 const notesDisplay = document.getElementById("notesDisplay");
 const clearNotes = document.getElementById("clearNotes");
+const clearChatHistoryBtn = document.getElementById("clearChatHistory");
 // Old checkbox removed - using toggle button system now
 const chatButton = document.getElementById("chatButton");
 const explorerButton = document.getElementById("explorerButton");
@@ -343,7 +352,10 @@ langSel.onchange = () => {
   Settings.lang = langSel.value;
   document.documentElement.dir = (Settings.lang === "he") ? "rtl" : "ltr";
 };
-clearBtn.onclick = () => { logEl.innerHTML = ""; };
+clearBtn.onclick = () => { 
+  logEl.innerHTML = ""; 
+  clearChatHistory();
+};
 
 /* ---------- Commands Popup Functionality ---------- */
 // Function to populate commands based on backend context
@@ -619,6 +631,14 @@ Are you absolutely sure you want to continue?`;
   }
 };
 
+// Clear chat history
+clearChatHistoryBtn.onclick = () => {
+  if (confirm("Are you sure you want to clear all chat history? This action cannot be undone.")) {
+    clearChatHistory();
+    addMsg("🗑️ Chat history cleared", "sys");
+  }
+};
+
 /* ---------- WebSocket connection to DroidScript backend ---------- */
 let ws;
 function connect(){
@@ -874,6 +894,9 @@ function addMsg(text, who) {
   div.className = "msg " + (who === "you" ? "you" : who === "bot" ? "bot" : "sys");
   div.textContent = text; logEl.appendChild(div);
   
+  // Save message to chat history
+  saveMessageToHistory(text, who);
+  
   // Speak bot responses if TTS is enabled
   if (who === "bot" && useTTS.checked) {
     speakText(text);
@@ -883,6 +906,52 @@ function addMsg(text, who) {
 }
 function scrollToBottom(){ logEl.scrollTop = logEl.scrollHeight; }
 
+// -------- Chat History Management --------
+function saveMessageToHistory(text, who) {
+  const message = {
+    text: text,
+    who: who,
+    timestamp: new Date().toISOString()
+  };
+  
+  // Get existing chat history
+  let chatHistory = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+  
+  // Add new message
+  chatHistory.push(message);
+  
+  // Keep only last 100 messages to prevent localStorage from getting too large
+  if (chatHistory.length > 100) {
+    chatHistory = chatHistory.slice(-100);
+  }
+  
+  // Save to localStorage
+  localStorage.setItem('chatHistory', JSON.stringify(chatHistory));
+}
+
+function loadChatHistory() {
+  const chatHistory = JSON.parse(localStorage.getItem('chatHistory') || '[]');
+  
+  // Clear current chat log
+  logEl.innerHTML = '';
+  
+  // Restore all messages
+  chatHistory.forEach(message => {
+    const div = document.createElement("div");
+    div.className = "msg " + (message.who === "you" ? "you" : message.who === "bot" ? "bot" : "sys");
+    div.textContent = message.text;
+    logEl.appendChild(div);
+  });
+  
+  // Scroll to bottom
+  scrollToBottom();
+}
+
+function clearChatHistory() {
+  localStorage.removeItem('chatHistory');
+  logEl.innerHTML = '';
+}
+
 // Initialize settings on page load
 function initializeSettings() {
   // Load stored API key
@@ -890,6 +959,9 @@ function initializeSettings() {
   if (storedKey) {
     Settings.geminiApiKey = storedKey;
   }
+  
+  // Load chat history
+  loadChatHistory();
 }
 
 // Hide tip section after 10 seconds
