@@ -6,9 +6,19 @@ var WebSocketHandler = {
     server: null,
     webView: null,
     port: 8080,
+    Settings: { lang: "en", autoConfirm: false },
+    
+    // -------- Settings Initialization --------
+    initializeSettings: function() {
+        // Settings is now initialized as a property of WebSocketHandler
+        console.log("DEBUG: Settings initialized with autoConfirm:", this.Settings.autoConfirm);
+    },
     
     // -------- Server Initialization --------
     initializeServer: function() {
+        // Initialize settings
+        this.initializeSettings();
+        
         // Create and start the web server to serve HTML and handle WebSocket
         this.server = app.CreateWebServer(this.port);
         this.server.SetFolder(app.GetAppPath());
@@ -66,9 +76,12 @@ var WebSocketHandler = {
     // -------- Message Routing --------
     routeMessage: function(o, ip, id) {
         switch (o.type) {
-            case "chat":
-                this.handleChatMessage(o, ip, id);
-                break;
+        case "chat":
+            this.handleChatMessage(o, ip, id);
+            break;
+        case "set_auto_confirm":
+            this.handleSetAutoConfirm(o, ip, id);
+            break;
             case "debug":
                 this.handleDebugMessage(o, ip, id);
                 break;
@@ -89,6 +102,13 @@ var WebSocketHandler = {
         }
     },
     
+    // -------- Auto Confirm Handler --------
+    handleSetAutoConfirm: function(o, ip, id) {
+        console.log("DEBUG: Setting auto confirm to:", o.enabled);
+        this.Settings.autoConfirm = o.enabled === true;
+        this.sendToClient({ type: "reply", text: `Auto confirmation ${o.enabled ? 'enabled' : 'disabled'}` }, ip, id);
+    },
+
     // -------- Chat Message Handling --------
     handleChatMessage: function(o, ip, id) {
         // Validate chat message
@@ -97,7 +117,20 @@ var WebSocketHandler = {
             return;
         }
         
-        Settings.lang = (o.lang === "he") ? "he" : "en";
+        this.Settings.lang = (o.lang === "he") ? "he" : "en";
+        this.Settings.autoConfirm = o.autoConfirm === true;
+        
+        // Also update global Settings for detectIntent
+        if (typeof global !== 'undefined' && global.Settings) {
+            global.Settings.lang = this.Settings.lang;
+            global.Settings.autoConfirm = this.Settings.autoConfirm;
+        }
+        
+        // Also set global Settings for formatOutcome access
+        if (typeof global !== 'undefined') {
+            global.Settings = this.Settings;
+        }
+        
         
         console.log("DEBUG: onWsReceive - calling detectIntent with text='" + o.text + "'");
         
@@ -109,8 +142,42 @@ var WebSocketHandler = {
         var pendingUpdate = StateManager.getPendingStoryUpdate();
         console.log("DEBUG: Pending states before detectIntent - Note:", pendingNote, "Deletion:", pendingDeletion, "MarkDone:", pendingMarkDone, "SubNote:", pendingSubNote, "Update:", pendingUpdate);
         
-        var det = CommandRouter.detectIntent(o.text, Settings);
+        // Make sure global Settings is synced with this.Settings
+        if (typeof global !== 'undefined') {
+            global.Settings = this.Settings;
+        }
+        var det = CommandRouter.detectIntent(o.text, this.Settings);
         console.log("DEBUG: onWsReceive - detectIntent returned:", JSON.stringify(det));
+        
+        // Handle auto confirmation for sub-note creation
+        if (det.action === "sub_note_name" && this.Settings.autoConfirm) {
+            var pendingSubNote = StateManager.getPendingSubNoteCreation();
+            if (pendingSubNote) {
+                var subNoteName = det.params?.name || "untitled";
+                
+                // Auto-proceed with sub-note creation
+                var note = NoteManager.createNote(subNoteName, "", pendingSubNote.parentNoteId);
+                StateManager.clearPendingSubNoteCreation();
+                
+                // Find the parent note and set it as current context
+                var parentNote = NoteManager.findNotesById(pendingSubNote.parentNoteId);
+                if (parentNote && parentNote.length > 0) {
+                    StateManager.setCurrentFindContext(parentNote);
+                    var isHebrew = (this.Settings.lang === "he");
+                    var successMsg = isHebrew ?
+                        "תת-פתק נוצר בהצלחה! ID: " + note.id + ", כותרת: '" + note.title + "'\n\n" +
+                        "חזרתי להקשר של הפתק הראשי '" + parentNote[0].title + "'. מה תרצה לעשות? (/editdescription /delete /createsub /markdone /talkai /selectsubnote)" :
+                        "Sub-note created successfully! ID: " + note.id + ", Title: '" + note.title + "'\n\n" +
+                        "Returned to parent note '" + parentNote[0].title + "' context. What would you like to do? (/editdescription /delete /createsub /markdone /talkai /selectsubnote)";
+                    
+                    this.sendToClient({ type: "reply", text: successMsg }, ip, id);
+                    // Send available commands
+                    var commands = this.getAvailableCommands();
+                    this.sendToClient({ type: "available_commands", commands: commands }, ip, id);
+                    return;
+                }
+            }
+        }
         
         // Handle slash commands that need to set state BEFORE formatOutcome
         if (det.action === "slash_createsub") {
@@ -164,7 +231,7 @@ var WebSocketHandler = {
             }
         }
         
-        if (det.action === "find_sub_delete") {
+        if (det.action === "find_sub_delete" || det.action === "slash_delete") {
             var context = StateManager.getCurrentFindContext();
             if (context && context.length > 0) {
                 var note = context[0].note || context[0];
@@ -270,7 +337,7 @@ var WebSocketHandler = {
         if (o.noteId && o.description) {
             var updatedNote = NoteManager.updateNoteDescription(o.noteId, o.description);
             if (updatedNote) {
-                var isHebrew = (Settings.lang === "he");
+                var isHebrew = (this.Settings.lang === "he");
                 var message = isHebrew ? 
                     "תיאור הסיפור '" + updatedNote.title + "' עודכן בהצלחה!" :
                     "Story description for '" + updatedNote.title + "' updated successfully!";
@@ -317,17 +384,27 @@ var WebSocketHandler = {
     
     // -------- Confirmation Response Handling --------
     handleConfirmationResponse: function(text) {
-        var isHebrew = (Settings.lang === "he");
+        var isHebrew = (this.Settings.lang === "he");
         var lowerText = text.toLowerCase().trim();
         
         console.log("DEBUG: handleConfirmationResponse called with text:", text);
-        console.log("DEBUG: lowerText:", lowerText);
         
-        // Debug: Check what pending states exist
+        // Check if auto confirmation is enabled and we have pending states
         var pendingNote = StateManager.getPendingNoteCreation();
         var pendingDeletion = StateManager.getPendingNoteDeletion();
         var pendingMarkDone = StateManager.getPendingNoteMarkDone();
-        console.log("DEBUG: Pending states - Note:", pendingNote, "Deletion:", pendingDeletion, "MarkDone:", pendingMarkDone);
+        var pendingSubNote = StateManager.getPendingSubNoteCreation();
+        
+        if (this.Settings.autoConfirm && (pendingNote || pendingDeletion || pendingMarkDone || pendingSubNote)) {
+            console.log("DEBUG: Auto confirmation enabled - proceeding automatically");
+            // Auto-proceed with "yes" for all confirmations
+            lowerText = "yes";
+        }
+        
+        // Check what pending states exist
+        var pendingNote = StateManager.getPendingNoteCreation();
+        var pendingDeletion = StateManager.getPendingNoteDeletion();
+        var pendingMarkDone = StateManager.getPendingNoteMarkDone();
         
         // Check for yes responses
         var yesPatterns = isHebrew ? 
@@ -477,7 +554,7 @@ var WebSocketHandler = {
     
     // -------- Command Generation --------
     getAvailableCommands: function() {
-        var lang = Settings.lang || "en";
+        var lang = this.Settings.lang || "en";
         var commands = [];
         
         // Check current application state
@@ -489,9 +566,7 @@ var WebSocketHandler = {
         var pendingNoteMarkDone = StateManager.getPendingNoteMarkDone();
         var pendingSubNoteCreation = StateManager.getPendingSubNoteCreation();
         
-        console.log("DEBUG: getAvailableCommands - currentFindContext:", currentFindContext);
-        console.log("DEBUG: getAvailableCommands - storyEditingMode:", storyEditingMode);
-        console.log("DEBUG: getAvailableCommands - aiConversationMode:", aiConversationMode);
+        // Debug: Current context state
         
         // Define command metadata
         var commandMetadata = {
@@ -599,20 +674,14 @@ var WebSocketHandler = {
                 examples: ["no", "n", "nope", "cancel"],
                 requiresParam: false,
                 contexts: ["pending_creation"] // Only when waiting for confirmation
-            }
-        };
-        
+    }
+};
+
         // Determine current context
         var currentContext = "main"; // Default
         
-        console.log("DEBUG: getAvailableCommands - checking context conditions:");
-        console.log("DEBUG: - storyEditingMode:", storyEditingMode);
-        console.log("DEBUG: - aiConversationMode:", aiConversationMode);
-        console.log("DEBUG: - pendingNoteCreation:", pendingNoteCreation);
-        console.log("DEBUG: - pendingNoteDeletion:", pendingNoteDeletion);
-        console.log("DEBUG: - pendingNoteMarkDone:", pendingNoteMarkDone);
-        console.log("DEBUG: - pendingSubNoteCreation:", pendingSubNoteCreation);
-        console.log("DEBUG: - currentFindContext:", currentFindContext);
+        // Determine context based on current state
+        // Check context conditions
         
         if (storyEditingMode) {
             currentContext = "story_editing";
@@ -624,7 +693,7 @@ var WebSocketHandler = {
             currentContext = "find_context";
         }
         
-        console.log("DEBUG: getAvailableCommands - determined context:", currentContext);
+        // Context determined
         
         // Extract commands based on current context
         for (var action in commandMetadata) {
@@ -654,7 +723,7 @@ var WebSocketHandler = {
                     
                     var command = commandMap[action];
                     if (command) {
-                        console.log("DEBUG: Adding command:", command, "for action:", action, "in context:", currentContext);
+                        // Adding command to available list
                         commands.push({
                             action: action,
                             command: command,
@@ -668,13 +737,13 @@ var WebSocketHandler = {
             }
         }
         
-        console.log("DEBUG: getAvailableCommands - returning commands:", commands.length);
+        // Return available commands
         return commands;
     },
     
     // -------- Format Outcome (moved from main.js) --------
     formatOutcome: function(r) {
-        var isHebrew = (Settings.lang === "he");
+        var isHebrew = (this.Settings.lang === "he");
         
         if (r.action === "unknown") {
             if (isHebrew) {
@@ -848,6 +917,22 @@ var WebSocketHandler = {
             return "Found " + parentNotes.length + " parent notes:\n\n" + noteList + "\nTo work with a specific note, use `/findnote [name]` or `/findbyid [number]`.";
         }
         
+        if (r.action === "slash_auto_confirm_on") {
+            this.Settings.autoConfirm = true;
+            if (isHebrew) {
+                return "✅ אישור אוטומטי הופעל! כל הפעולות ימשיכו אוטומטית ללא אישור.";
+            }
+            return "✅ Auto confirmation enabled! All actions will proceed automatically without confirmation.";
+        }
+        
+        if (r.action === "slash_auto_confirm_off") {
+            this.Settings.autoConfirm = false;
+            if (isHebrew) {
+                return "❌ אישור אוטומטי בוטל! כל הפעולות ידרשו אישור ידני.";
+            }
+            return "❌ Auto confirmation disabled! All actions will require manual confirmation.";
+        }
+        
         if (r.action === "slash_help") {
             if (isHebrew) {
                 return "🆘 **פקודות זמינות:**\n\n" +
@@ -860,6 +945,9 @@ var WebSocketHandler = {
                        "• `/showparents` - הצג פתקים ראשיים\n\n" +
                        "🔙 **פקודות ניווט:**\n" +
                        "• `/back` - חזור להקשר הקודם\n\n" +
+                       "⚙️ **הגדרות:**\n" +
+                       "• `/autoconfirmon` - הפעל אישור אוטומטי\n" +
+                       "• `/autoconfirmoff` - בטל אישור אוטומטי\n\n" +
                        "💡 **דוגמאות מהירות:**\n" +
                        "• `/createnote רשימת קניות`\n" +
                        "• `/findnote מוצרים`\n" +
@@ -888,6 +976,9 @@ var WebSocketHandler = {
                    "• `/selectsubnote [number]` - Select sub-note\n\n" +
                    "🤖 **AI Commands:**\n" +
                    "• `/talkai` - Start AI conversation\n\n" +
+                   "⚙️ **Settings Commands:**\n" +
+                   "• `/autoconfirmon` - Enable auto confirmation\n" +
+                   "• `/autoconfirmoff` - Disable auto confirmation\n\n" +
                    "🔙 **Navigation Commands:**\n" +
                    "• `/back` - Go back to previous context\n\n" +
                    "💡 **Quick Examples:**\n" +
@@ -1337,6 +1428,8 @@ var WebSocketHandler = {
             StateManager.clearPendingSubNoteCreation();
             StateManager.clearCurrentFindContext();
             
+            // Note: Auto confirmation is now handled in handleChatMessage before formatOutcome
+            
             if (isHebrew) {
                 return "האם תרצה ליצור תת-פתק בשם '" + subNoteName + "'? (כן/לא)";
             }
@@ -1350,3 +1443,8 @@ var WebSocketHandler = {
     },
     
 };
+
+// Export for testing
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = WebSocketHandler;
+}

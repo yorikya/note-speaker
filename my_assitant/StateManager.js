@@ -201,5 +201,25 @@ var StateManager = {
     
     clearPendingCommandCompletion: function() {
         this.pendingCommandCompletion = null;
+    },
+    
+    // -------- Clear All States Function --------
+    clearAllStates: function() {
+        this.currentFindContext = null;
+        this.aiConversationMode = null;
+        this.aiConversationNote = null;
+        this.aiConversationHistory = [];
+        this.pendingNoteCreation = null;
+        this.pendingNoteDeletion = null;
+        this.pendingNoteMarkDone = null;
+        this.pendingSubNoteCreation = null;
+        this.pendingCommandCompletion = null;
+        this.storyEditingMode = null;
+        this.pendingStoryUpdate = null;
     }
 };
+
+// Export for testing
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = StateManager;
+}

@@ -122,10 +122,23 @@
     </div>
     
     <div style="margin-top:20px;">
+        <h3>Workflow Settings</h3>
+        <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:16px;">
+          <button id="toggleAutoConfirmBtn" class="nav-button" style="background:#2d5a87; color:white; border:none; padding:8px 12px; border-radius:4px; font-size:14px;">
+            Auto Confirm: OFF
+          </button>
+          <small style="color:#666; font-size:12px;">Toggle auto confirmation for all actions</small>
+        </div>
+      <div style="font-size:12px; color:#a0a0a0; margin-bottom:16px;">
+        When enabled, the system will automatically proceed with "Yes" for all confirmation prompts (note creation, deletion, marking as done, etc.)
+      </div>
+    </div>
+    
+    <div style="margin-top:20px;">
       <h3>Debug Tools</h3>
       <div style="display:flex; flex-direction:column; gap:8px;">
         <button id="showNotes">Show Notes (Debug)</button>
-        <button id="clearNotes" class="secondary" style="background:#ff4444;">Clear All Notes</button>
+        <button id="clearNotes" class="secondary" style="background:#ff4444;">🗑️ Clear All Notes (DANGER)</button>
       </div>
       <div id="notesDisplay" style="margin-top:10px; padding:10px; background:#2a2f36; border-radius:6px; max-height:200px; overflow-y:auto; font-family:monospace; font-size:12px; white-space:pre-wrap; display:none;"></div>
     </div>
@@ -136,7 +149,44 @@
 /* ---------- Settings ---------- */
 const Settings = { 
   lang: "en",
-  geminiApiKey: "AIzaSyC9dXJT4ol3i2VoK6aqLjX5S7IMKSjwNC4" // Default API key
+  geminiApiKey: "AIzaSyC9dXJT4ol3i2VoK6aqLjX5S7IMKSjwNC4", // Default API key
+  autoConfirm: false
+};
+
+// Global auto confirmation state
+var GlobalAutoConfirm = {
+  enabled: false,
+  toggle: function() {
+    this.enabled = !this.enabled;
+    this.updateUI();
+    this.saveToStorage();
+    this.updateBackend();
+    return this.enabled;
+  },
+  updateUI: function() {
+    const btn = document.getElementById('toggleAutoConfirmBtn');
+    if (btn) {
+      btn.textContent = `Auto Confirm: ${this.enabled ? 'ON' : 'OFF'}`;
+      btn.style.background = this.enabled ? '#28a745' : '#2d5a87';
+    }
+  },
+  saveToStorage: function() {
+    localStorage.setItem('globalAutoConfirm', this.enabled.toString());
+  },
+  loadFromStorage: function() {
+    const saved = localStorage.getItem('globalAutoConfirm');
+    this.enabled = saved === 'true';
+    this.updateUI();
+  },
+  updateBackend: function() {
+    // Send current state to backend
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'set_auto_confirm',
+        enabled: this.enabled
+      }));
+    }
+  }
 };
 
 /* ---------- UI wiring ---------- */
@@ -160,6 +210,7 @@ const apiStatus = document.getElementById("apiStatus");
 const showNotes = document.getElementById("showNotes");
 const notesDisplay = document.getElementById("notesDisplay");
 const clearNotes = document.getElementById("clearNotes");
+// Old checkbox removed - using toggle button system now
 const chatButton = document.getElementById("chatButton");
 const explorerButton = document.getElementById("explorerButton");
 
@@ -245,7 +296,7 @@ function generateDynamicCommands() {
       const commandText = cmd.requiresParam ? cmd.command + ' ' : cmd.command;
       let buttonText = cmd.command;
       
-      console.log("DEBUG: Generating command:", cmd.command, "commandText:", commandText, "requiresParam:", cmd.requiresParam);
+      // Generate command button
       
       // Add description to the button text
       if (cmd.description) {
@@ -259,11 +310,7 @@ function generateDynamicCommands() {
       }
       
       const buttonHtml = `<button class="command-btn" data-command="${commandText}">${buttonText}</button>`;
-      console.log("Generated button HTML:", buttonHtml);
-      console.log("Button HTML length:", buttonHtml.length);
-      console.log("Button HTML contains 'button':", buttonHtml.includes('button'));
       html += buttonHtml;
-      console.log("HTML after adding button:", html.length, "characters");
     });
     html += `</div>`;
   }
@@ -321,13 +368,7 @@ function populateCommands() {
   // Use backend commands exclusively
   if (commandsLoaded && availableCommands.length > 0) {
     const generatedHtml = generateDynamicCommands();
-    console.log("Generated HTML:", generatedHtml);
-    console.log("Generated HTML length:", generatedHtml.length);
-    console.log("Generated HTML contains 'button':", generatedHtml.includes('button'));
     commandsContent.innerHTML += generatedHtml;
-    console.log("Final DOM content:", commandsContent.innerHTML);
-    console.log("Final DOM content length:", commandsContent.innerHTML.length);
-    console.log("Final DOM content contains 'button':", commandsContent.innerHTML.includes('button'));
   } else {
     // Fallback message if no commands available
     commandsContent.innerHTML += `
@@ -430,8 +471,19 @@ function navigateToPage(page) {
 }
 
 // Navigation button handlers
-chatButton.onclick = () => navigateToPage('chat');
-explorerButton.onclick = () => navigateToPage('explorer');
+  chatButton.onclick = () => navigateToPage('chat');
+  explorerButton.onclick = () => navigateToPage('explorer');
+  
+  // Auto confirm toggle button
+  const toggleAutoConfirmBtn = document.getElementById('toggleAutoConfirmBtn');
+  if (toggleAutoConfirmBtn) {
+    toggleAutoConfirmBtn.onclick = () => {
+      const newState = GlobalAutoConfirm.toggle();
+      console.log('Auto confirmation toggled to:', newState);
+    };
+  }
+
+// Old checkbox handler removed - using toggle button system now
 
 // Load stored API key from localStorage
 function loadStoredApiKey() {
@@ -445,7 +497,14 @@ function loadStoredApiKey() {
     apiStatus.textContent = "Using default API key";
     apiStatus.style.color = "#FFA500";
   }
+  
+  // Old auto confirmation loading removed - using GlobalAutoConfirm system now
+  
+  // Initialize global auto confirm
+  GlobalAutoConfirm.loadFromStorage();
 }
+
+// Old auto confirmation functions removed - using GlobalAutoConfirm system now
 
 // Save API key
 saveApiKey.onclick = () => {
@@ -519,17 +578,44 @@ showNotes.onclick = () => {
 
 // Clear all notes
 clearNotes.onclick = () => {
-  if (confirm("Are you sure you want to clear ALL notes? This action cannot be undone.")) {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      try {
-        ws.send(JSON.stringify({type:'debug', action:'clear_notes'}));
-        addMsg("Clearing all notes...", "sys");
-      } catch (error) {
-        addMsg("Error sending clear request: " + error.message, "sys");
+  const warningMessage = `⚠️ DANGER: Clear All Notes
+
+This action will PERMANENTLY DELETE:
+• All notes and their descriptions
+• All sub-notes and their relationships  
+• All note history and metadata
+• All AI conversation history
+
+🚨 THIS ACTION CANNOT BE UNDONE! 🚨
+
+Are you absolutely sure you want to continue?`;
+
+  if (confirm(warningMessage)) {
+    // Double confirmation for extra safety
+    const finalConfirm = confirm("FINAL WARNING: This will delete EVERYTHING!\n\nType 'DELETE' in the next prompt to confirm:");
+    
+    if (finalConfirm) {
+      const userInput = prompt("Type 'DELETE' to permanently clear all notes:");
+      
+      if (userInput === 'DELETE') {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          try {
+            ws.send(JSON.stringify({type:'debug', action:'clear_notes'}));
+            addMsg("🗑️ Clearing all notes... This action cannot be undone!", "sys");
+          } catch (error) {
+            addMsg("Error sending clear request: " + error.message, "sys");
+          }
+        } else {
+          addMsg("Not connected to backend", "sys");
+        }
+      } else {
+        addMsg("❌ Clear operation cancelled - you must type 'DELETE' exactly", "sys");
       }
     } else {
-      addMsg("Not connected to backend", "sys");
+      addMsg("❌ Clear operation cancelled", "sys");
     }
+  } else {
+    addMsg("❌ Clear operation cancelled", "sys");
   }
 };
 
@@ -576,11 +662,8 @@ function connect(){
         availableCommands = msg.commands || [];
         commandsLoaded = true;
         console.log("Loaded dynamic commands:", availableCommands);
-        console.log("DEBUG: Available commands count:", availableCommands.length);
-        // Log each command for debugging
-        availableCommands.forEach(cmd => {
-          console.log("DEBUG: Command:", cmd.command, "requiresParam:", cmd.requiresParam, "category:", cmd.category);
-        });
+        // Commands loaded
+        // Commands loaded successfully
       }
       else addMsg(ev.data,'sys'); 
     }
@@ -608,8 +691,8 @@ formEl.addEventListener("submit", async (e) => {
   // Send to DroidScript backend via WebSocket for intent processing
   if (ws && ws.readyState === WebSocket.OPEN) {
     try {
-      const message = {type:'chat', text, lang: Settings.lang };
-      ws.send(JSON.stringify(message));
+    const message = {type:'chat', text, lang: Settings.lang, autoConfirm: GlobalAutoConfirm.enabled };
+    ws.send(JSON.stringify(message));
     } catch (error) {
       addMsg("Error sending message: " + error.message, "sys");
     }
@@ -766,7 +849,8 @@ function handleUrlParameters() {
       ws.send(JSON.stringify({
         type: 'chat',
         text: `/findbyid ${findbyid}`,
-        lang: Settings.lang
+        lang: Settings.lang,
+        autoConfirm: Settings.autoConfirm
       }));
     } else {
       // If WebSocket is not ready, wait a bit and try again
@@ -775,7 +859,8 @@ function handleUrlParameters() {
           ws.send(JSON.stringify({
             type: 'chat',
             text: `/findbyid ${findbyid}`,
-            lang: Settings.lang
+            lang: Settings.lang,
+            autoConfirm: Settings.autoConfirm
           }));
         }
       }, 1000);

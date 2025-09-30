@@ -24,6 +24,9 @@ var CommandRouter = {
             help: [ /\b(help|assist|guide|what can i do|what should i do)\b/i, /\b(help|assist|guide)\b/i ],
             // Show parent notes command
             show_parent_notes: [ /\b(show|list|display)\s+(parent|main|root)\s+(notes|note)\b/i, /\b(parent|main|root)\s+(notes|note)\b/i, /\b(show|list|display)\s+(all\s+)?(notes|note)\b/i ],
+            // Auto confirm commands
+            auto_confirm_on: [ /\b(auto\s+confirm|auto\s+yes|auto\s+proceed)\s+(on|enable|yes|true)\b/i, /\b(enable|turn\s+on)\s+(auto\s+confirm|auto\s+yes|auto\s+proceed)\b/i ],
+            auto_confirm_off: [ /\b(auto\s+confirm|auto\s+yes|auto\s+proceed)\s+(off|disable|no|false)\b/i, /\b(disable|turn\s+off)\s+(auto\s+confirm|auto\s+yes|auto\s+proceed)\b/i ],
         },
         he: {
             // Hebrew pattern equivalent of English patterns
@@ -41,6 +44,9 @@ var CommandRouter = {
             help: [ /\b(עזרה|סיוע|הדרכה|מה אני יכול לעשות|מה עלי לעשות)\b/i, /\b(עזרה|סיוע|הדרכה)\b/i ],
             // Show parent notes command
             show_parent_notes: [ /(הצג|הראה|רשום|רשימה)\s+(פתקים|פתק|הערות|הערה)\s+(ראשיים|עיקריים|שורש)/i, /(פתקים|פתק|הערות|הערה)\s+(ראשיים|עיקריים|שורש)/i, /(הצג|הראה|רשום|רשימה)\s+(כל\s+)?(פתקים|פתק|הערות|הערה)/i ],
+            // Auto confirm commands
+            auto_confirm_on: [ /\b(אישור\s+אוטומטי|כן\s+אוטומטי|המשך\s+אוטומטי)\s+(פעיל|מופעל|כן|אמת)\b/i, /\b(הפעל|הפעלה)\s+(אישור\s+אוטומטי|כן\s+אוטומטי|המשך\s+אוטומטי)\b/i ],
+            auto_confirm_off: [ /\b(אישור\s+אוטומטי|כן\s+אוטומטי|המשך\s+אוטומטי)\s+(כבוי|מבוטל|לא|שקר)\b/i, /\b(בטל|כיבוי)\s+(אישור\s+אוטומטי|כן\s+אוטומטי|המשך\s+אוטומטי)\b/i ],
         }
     },
     
@@ -144,6 +150,15 @@ var CommandRouter = {
             return {action: "ai_conversation", params: {message: text.trim()}, confidence: 1};
         }
         
+        // Check for auto confirm commands first
+        if (table["auto_confirm_on"] && table["auto_confirm_on"].some(rx => rx.test(text))) {
+            return {action: "auto_confirm_on", params: {}, confidence: 1};
+        }
+        
+        if (table["auto_confirm_off"] && table["auto_confirm_off"].some(rx => rx.test(text))) {
+            return {action: "auto_confirm_off", params: {}, confidence: 1};
+        }
+
         // Check if we're in story editing mode
         var storyEditingMode = StateManager.getStoryEditingMode();
         console.log("DEBUG: detectIntent - storyEditingMode:", storyEditingMode);
@@ -261,7 +276,10 @@ var CommandRouter = {
                 '/selectsub': 'slash_selectsubnote',
                 '/sub': 'slash_selectsubnote',
                 '/stopediting': 'slash_stopediting',
-                '/back': 'slash_back'
+                '/back': 'slash_back',
+                '/autoconfirm': 'slash_auto_confirm_on',
+                '/autoconfirmon': 'slash_auto_confirm_on',
+                '/autoconfirmoff': 'slash_auto_confirm_off'
             };
             
             var action = commandMap[command];
@@ -353,3 +371,8 @@ var CommandRouter = {
     
     
 };
+
+// Export for testing
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = CommandRouter;
+}
