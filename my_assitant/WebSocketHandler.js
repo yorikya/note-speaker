@@ -334,7 +334,24 @@ var WebSocketHandler = {
                 if (pendingNote) {
                     var note = NoteManager.createNote(pendingNote.title, "", pendingNote.parentId);
                     StateManager.clearPendingNoteCreation();
-                    StateManager.clearCurrentFindContext(); // Clear find context after action
+                    
+                    // If this is a sub-note creation (has parentId), return to parent context
+                    if (pendingNote.parentId) {
+                        // Find the parent note and set it as current context
+                        var parentNote = NoteManager.findNotesById(pendingNote.parentId);
+                        if (parentNote && parentNote.length > 0) {
+                            StateManager.setCurrentFindContext(parentNote);
+                            if (isHebrew) {
+                                return "תת-פתק נוצר בהצלחה! ID: " + note.id + ", כותרת: '" + note.title + "'\n\n" +
+                                       "חזרתי להקשר של הפתק הראשי '" + parentNote[0].title + "'. מה תרצה לעשות? (/editdescription /delete /createsub /markdone /talkai /selectsubnote)";
+                            }
+                            return "Sub-note created successfully! ID: " + note.id + ", Title: '" + note.title + "'\n\n" +
+                                   "Returned to parent note '" + parentNote[0].title + "' context. What would you like to do? (/editdescription /delete /createsub /markdone /talkai /selectsubnote)";
+                        }
+                    }
+                    
+                    // For regular notes, clear find context
+                    StateManager.clearCurrentFindContext();
                     if (isHebrew) {
                         return "פתק נוצר בהצלחה! ID: " + note.id + ", כותרת: '" + note.title + "'";
                     }
@@ -492,7 +509,7 @@ var WebSocketHandler = {
                 description: "Showing all parent notes",
                 examples: ["/showparents"],
                 requiresParam: false,
-                contexts: ["main"] // Only in main context
+                contexts: ["main", "find_context"] // Available in main and find contexts
             },
             slash_help: { 
                 category: "❓ Help", 
@@ -550,10 +567,10 @@ var WebSocketHandler = {
                 requiresParam: false,
                 contexts: ["story_editing"] // Only when editing
             },
-            slash_cancel: { 
-                category: "🚫 Cancel", 
-                description: "Canceling current action",
-                examples: ["/cancel"],
+            slash_back: { 
+                category: "🔙 Back", 
+                description: "Going back to previous context",
+                examples: ["/back"],
                 requiresParam: false,
                 contexts: ["find_context", "story_editing", "ai_conversation", "pending_creation"] // Available in most contexts
             },
@@ -618,7 +635,7 @@ var WebSocketHandler = {
                         'slash_talkai': '/talkai',
                         'slash_selectsubnote': '/selectsubnote',
                         'slash_stopediting': '/stopediting',
-                        'slash_cancel': '/cancel',
+                        'slash_back': '/back',
                         'yes_response': 'yes',
                         'no_response': 'no'
                     };
@@ -829,6 +846,8 @@ var WebSocketHandler = {
                        "• `/findbyid [מספר]` - חפש לפי מזהה\n\n" +
                        "📋 **פקודות הצגה:**\n" +
                        "• `/showparents` - הצג פתקים ראשיים\n\n" +
+                       "🔙 **פקודות ניווט:**\n" +
+                       "• `/back` - חזור להקשר הקודם\n\n" +
                        "💡 **דוגמאות מהירות:**\n" +
                        "• `/createnote רשימת קניות`\n" +
                        "• `/findnote מוצרים`\n" +
@@ -857,8 +876,8 @@ var WebSocketHandler = {
                    "• `/selectsubnote [number]` - Select sub-note\n\n" +
                    "🤖 **AI Commands:**\n" +
                    "• `/talkai` - Start AI conversation\n\n" +
-                   "🚫 **Cancel Commands:**\n" +
-                   "• `/cancel` - Cancel current action\n\n" +
+                   "🔙 **Navigation Commands:**\n" +
+                   "• `/back` - Go back to previous context\n\n" +
                    "💡 **Quick Examples:**\n" +
                    "• `/createnote shopping list`\n" +
                    "• `/findnote groceries`\n" +
@@ -1243,7 +1262,7 @@ var WebSocketHandler = {
             }
         }
         
-        if (r.action === "slash_cancel") {
+        if (r.action === "slash_back") {
             // Clear all pending states and modes
             StateManager.clearPendingNoteCreation();
             StateManager.clearPendingNoteDeletion();

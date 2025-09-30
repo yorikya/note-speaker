@@ -247,7 +247,12 @@ function generateDynamicCommands() {
         buttonText += ` <span style="opacity: 0.7; font-size: 0.9em;">(${example})</span>`;
       }
       
-      html += `<button class="command-btn" data-command="${commandText}">${buttonText}</button>`;
+      const buttonHtml = `<button class="command-btn" data-command="${commandText}">${buttonText}</button>`;
+      console.log("Generated button HTML:", buttonHtml);
+      console.log("Button HTML length:", buttonHtml.length);
+      console.log("Button HTML contains 'button':", buttonHtml.includes('button'));
+      html += buttonHtml;
+      console.log("HTML after adding button:", html.length, "characters");
     });
     html += `</div>`;
   }
@@ -304,7 +309,14 @@ function populateCommands() {
   
   // Use backend commands exclusively
   if (commandsLoaded && availableCommands.length > 0) {
-    commandsContent.innerHTML += generateDynamicCommands();
+    const generatedHtml = generateDynamicCommands();
+    console.log("Generated HTML:", generatedHtml);
+    console.log("Generated HTML length:", generatedHtml.length);
+    console.log("Generated HTML contains 'button':", generatedHtml.includes('button'));
+    commandsContent.innerHTML += generatedHtml;
+    console.log("Final DOM content:", commandsContent.innerHTML);
+    console.log("Final DOM content length:", commandsContent.innerHTML.length);
+    console.log("Final DOM content contains 'button':", commandsContent.innerHTML.includes('button'));
   } else {
     // Fallback message if no commands available
     commandsContent.innerHTML += `
@@ -334,13 +346,20 @@ commandsOverlay.onclick = () => {
 
 // Handle command button clicks
 document.addEventListener('click', (e) => {
-  if (e.target.classList.contains('command-btn')) {
-    const command = e.target.getAttribute('data-command');
-    console.log("DEBUG: Command button clicked:", command);
+  console.log("Click detected on:", e.target.tagName, "classes:", e.target.className);
+  
+  // Find the closest command button (handles clicks on child elements)
+  const commandButton = e.target.closest('.command-btn');
+  console.log("Closest command button:", commandButton);
+  
+  if (commandButton) {
+    const command = commandButton.getAttribute('data-command');
+    console.log("Command button clicked:", command);
+    
     if (command) {
-      // Add the command to the input field with whitespace at the end
+      // Add the command to the input field
       inputEl.value = command;
-      console.log("DEBUG: Set input value to:", inputEl.value);
+      console.log("Set input value to:", inputEl.value);
       // Add to command history
       addToCommandHistory(command);
       // Close the popup
@@ -348,7 +367,11 @@ document.addEventListener('click', (e) => {
       commandsOverlay.classList.remove("show");
       // Focus on the input field
       inputEl.focus();
+    } else {
+      console.log("No command attribute found");
     }
+  } else {
+    console.log("Not a command button");
   }
 });
 

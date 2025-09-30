@@ -261,7 +261,7 @@ var CommandRouter = {
                 '/selectsub': 'slash_selectsubnote',
                 '/sub': 'slash_selectsubnote',
                 '/stopediting': 'slash_stopediting',
-                '/cancel': 'slash_cancel'
+                '/back': 'slash_back'
             };
             
             var action = commandMap[command];
