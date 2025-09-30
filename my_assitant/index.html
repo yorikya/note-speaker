@@ -12,10 +12,15 @@
   header .spacer { flex:1; }
   select, button, input[type="text"] { background:#15181c; color:#e6e6e6; border:1px solid #2a2f36; border-radius:12px; padding:6px 10px; }
   #log { flex:1; overflow:auto; padding:16px; display:flex; flex-direction:column; gap:10px; }
-  .msg { max-width:85%; padding:10px 12px; border-radius:14px; line-height:1.35; white-space:pre-wrap; }
+  .msg { max-width:85%; padding:10px 12px; border-radius:14px; line-height:1.35; white-space:pre-wrap; display:flex; flex-direction:column; gap:4px; }
   .you { align-self:flex-end; background:#1f6feb; color:white; border-bottom-right-radius:4px; }
   .bot { align-self:flex-start; background:#15181c; border:1px solid #2a2f36; border-bottom-left-radius:4px; }
   .sys { align-self:center; font-size:12px; opacity:.8; }
+  .msg-content { flex:1; }
+  .msg-timestamp { font-size:10px; opacity:0.7; text-align:right; margin-top:2px; }
+  .you .msg-timestamp { color:rgba(255,255,255,0.8); }
+  .bot .msg-timestamp { color:#a0a0a0; }
+  .sys .msg-timestamp { color:#a0a0a0; text-align:center; }
   form { display:flex; gap:8px; padding:12px 16px; border-top:1px solid #222; }
   textarea { flex:1; resize:none; height:70px; background:#15181c; color:#e6e6e6; border:1px solid #2a2f36; border-radius:12px; padding:10px; }
   button.primary { background:#1f6feb; color:white; border:none; border-radius:12px; padding:10px 14px; }
@@ -892,7 +897,22 @@ function handleUrlParameters() {
 function addMsg(text, who) {
   const div = document.createElement("div");
   div.className = "msg " + (who === "you" ? "you" : who === "bot" ? "bot" : "sys");
-  div.textContent = text; logEl.appendChild(div);
+  
+  // Create message content with timestamp
+  const messageContent = document.createElement("div");
+  messageContent.className = "msg-content";
+  messageContent.textContent = text;
+  
+  // Create timestamp
+  const timestamp = document.createElement("div");
+  timestamp.className = "msg-timestamp";
+  timestamp.textContent = formatTimestamp(new Date());
+  
+  // Add content and timestamp to message
+  div.appendChild(messageContent);
+  div.appendChild(timestamp);
+  
+  logEl.appendChild(div);
   
   // Save message to chat history
   saveMessageToHistory(text, who);
@@ -905,6 +925,34 @@ function addMsg(text, who) {
   scrollToBottom();
 }
 function scrollToBottom(){ logEl.scrollTop = logEl.scrollHeight; }
+
+// Format timestamp for display (like WhatsApp)
+function formatTimestamp(date) {
+  const now = new Date();
+  const messageDate = new Date(date);
+  
+  // Check if it's today
+  if (messageDate.toDateString() === now.toDateString()) {
+    return messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  
+  // Check if it's yesterday
+  const yesterday = new Date(now);
+  yesterday.setDate(yesterday.getDate() - 1);
+  if (messageDate.toDateString() === yesterday.toDateString()) {
+    return "Yesterday " + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  
+  // Check if it's this week
+  const weekAgo = new Date(now);
+  weekAgo.setDate(weekAgo.getDate() - 7);
+  if (messageDate > weekAgo) {
+    return messageDate.toLocaleDateString([], { weekday: 'short' }) + " " + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  }
+  
+  // Older messages show date and time
+  return messageDate.toLocaleDateString([], { month: 'short', day: 'numeric' }) + " " + messageDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
 
 // -------- Chat History Management --------
 function saveMessageToHistory(text, who) {
@@ -935,11 +983,25 @@ function loadChatHistory() {
   // Clear current chat log
   logEl.innerHTML = '';
   
-  // Restore all messages
+  // Restore all messages with timestamps
   chatHistory.forEach(message => {
     const div = document.createElement("div");
     div.className = "msg " + (message.who === "you" ? "you" : message.who === "bot" ? "bot" : "sys");
-    div.textContent = message.text;
+    
+    // Create message content
+    const messageContent = document.createElement("div");
+    messageContent.className = "msg-content";
+    messageContent.textContent = message.text;
+    
+    // Create timestamp from stored timestamp
+    const timestamp = document.createElement("div");
+    timestamp.className = "msg-timestamp";
+    timestamp.textContent = formatTimestamp(new Date(message.timestamp));
+    
+    // Add content and timestamp to message
+    div.appendChild(messageContent);
+    div.appendChild(timestamp);
+    
     logEl.appendChild(div);
   });
   
