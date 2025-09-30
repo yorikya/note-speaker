@@ -81,6 +81,9 @@ var WebSocketHandler = {
             case "get_commands":
                 this.handleGetCommands(o, ip, id);
                 break;
+            case "get_all_notes":
+                this.handleGetAllNotes(o, ip, id);
+                break;
             default:
                 this.sendToClient({ type: "reply", text: "Unknown message type: " + o.type }, ip, id);
         }
@@ -300,6 +303,15 @@ var WebSocketHandler = {
             this.sendToClient({ type: "available_commands", commands: commands }, ip, id);
         } catch (error) {
             this.sendToClient({ type: "reply", text: "Error getting commands: " + error.message }, ip, id);
+        }
+    },
+    
+    handleGetAllNotes: function(o, ip, id) {
+        try {
+            var allNotes = NoteManager.getAllNotes();
+            this.sendToClient({ type: "all_notes", notes: allNotes }, ip, id);
+        } catch (error) {
+            this.sendToClient({ type: "reply", text: "Error getting notes: " + error.message }, ip, id);
         }
     },
     

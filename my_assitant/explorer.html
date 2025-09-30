@@ -1,0 +1,421 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Note Explorer – Note Secretary</title>
+<style>
+  body { margin:0; font-family: system-ui, Arial, sans-serif; background:#0b0d10; color:#e6e6e6; }
+  .app { display:flex; flex-direction:column; height:100dvh; max-width:1200px; margin:0 auto; }
+  
+  /* Header Styles */
+  header { padding:12px 16px; border-bottom:1px solid #222; display:flex; gap:8px; align-items:center; background:#1a1d21; }
+  header h1 { font-size:18px; margin:0; font-weight:600; }
+  header .spacer { flex:1; }
+  button { background:#1f6feb; color:white; border:none; border-radius:8px; padding:8px 16px; cursor:pointer; }
+  button.secondary { background:#444; }
+  button:hover { opacity:0.9; }
+  
+  /* Search Bar */
+  .search-container { padding:16px; background:#1a1d21; border-bottom:1px solid #222; }
+  .search-bar { width:100%; max-width:400px; padding:10px 16px; background:#2a2f36; color:#e6e6e6; border:1px solid #444; border-radius:24px; font-size:16px; }
+  .search-bar:focus { outline:none; border-color:#1f6feb; }
+  
+  /* Notes Grid */
+  .notes-container { flex:1; padding:16px; overflow-y:auto; }
+  .notes-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:16px; }
+  
+  /* Note Card Styles */
+  .note-card { background:#1a1d21; border:1px solid #2a2f36; border-radius:12px; padding:16px; cursor:pointer; transition:all 0.2s ease; position:relative; }
+  .note-card:hover { border-color:#1f6feb; transform:translateY(-2px); box-shadow:0 4px 12px rgba(31, 111, 235, 0.1); }
+  .note-card.completed { opacity:0.8; }
+  
+  .note-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px; }
+  .note-title { font-size:16px; font-weight:600; color:#e6e6e6; line-height:1.3; flex:1; margin-right:8px; }
+  .note-actions { display:flex; align-items:center; gap:8px; }
+  .parent-indicator { background:#1f6feb; color:white; font-size:12px; font-weight:bold; padding:2px 6px; border-radius:4px; }
+  .note-menu-btn { background:none; border:none; color:#a0a0a0; font-size:18px; cursor:pointer; padding:4px; border-radius:4px; transition:all 0.2s ease; }
+  .note-menu-btn:hover { background:#2a2f36; color:#e6e6e6; }
+  .note-description { font-size:14px; color:#a0a0a0; line-height:1.4; margin:0 0 12px 0; max-height:60px; overflow:hidden; }
+  .note-meta { display:flex; justify-content:space-between; align-items:center; font-size:12px; color:#666; }
+  .note-id { background:#2a2f36; padding:2px 6px; border-radius:4px; }
+  .note-date { font-size:12px; }
+  .note-status { font-weight:600; }
+  .note-status.completed { color:#4ade80; }
+  .note-status.pending { color:#fbbf24; }
+  
+  /* Sub-notes indicator */
+  .sub-notes { margin-top:8px; padding:8px; background:#2a2f36; border-radius:6px; font-size:12px; color:#a0a0a0; }
+  .sub-notes-count { color:#1f6feb; font-weight:600; }
+  
+  /* Empty State */
+  .empty-state { text-align:center; padding:60px 20px; color:#666; }
+  .empty-state h3 { font-size:18px; margin:0 0 8px 0; }
+  .empty-state p { font-size:14px; margin:0; }
+  
+  /* Side Menu Styles (reused from index.html) */
+  .side-menu { position:fixed; top:0; left:-300px; width:300px; height:100vh; background:#1a1d21; border-right:1px solid #333; z-index:1000; transition:left 0.3s ease; }
+  .side-menu.open { left:0; }
+  .side-menu-header { padding:16px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; }
+  .side-menu-content { padding:16px; }
+  .side-menu h2 { margin:0 0 16px 0; font-size:18px; color:#e6e6e6; }
+  .side-menu button { background:#1f6feb; color:white; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; margin-right:8px; }
+  .side-menu button.secondary { background:#444; }
+  .side-menu button.nav-button { width:100%; margin:0 0 8px 0; font-size:16px; padding:12px 16px; }
+  .side-menu button.nav-button:disabled { opacity:0.5; cursor:not-allowed; }
+  .side-menu button.nav-button.active { background:#2d5a87; border:2px solid #1f6feb; }
+  .overlay { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:none; }
+  .overlay.show { display:block; }
+  
+  /* Loading State */
+  .loading { text-align:center; padding:40px; color:#666; }
+  .loading::after { content:''; display:inline-block; width:20px; height:20px; border:2px solid #333; border-top:2px solid #1f6feb; border-radius:50%; animation:spin 1s linear infinite; margin-left:10px; }
+  @keyframes spin { 0% { transform:rotate(0deg); } 100% { transform:rotate(360deg); } }
+  
+  /* Responsive */
+  @media (max-width: 768px) {
+    .notes-grid { grid-template-columns:1fr; }
+    .search-bar { max-width:100%; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <!-- Header -->
+  <header>
+    <button id="menuBtn">☰</button>
+    <h1>📝 Note Explorer</h1>
+    <div class="spacer"></div>
+    <button id="refreshBtn">🔄 Refresh</button>
+  </header>
+  
+  <!-- Search Bar -->
+  <div class="search-container">
+    <input type="text" id="searchInput" class="search-bar" placeholder="Search notes...">
+  </div>
+  
+  <!-- Notes Container -->
+  <div class="notes-container">
+    <div id="loadingState" class="loading" style="display:none;">Loading notes...</div>
+    <div id="emptyState" class="empty-state" style="display:none;">
+      <h3>No notes found</h3>
+      <p>Create your first note using the Chat interface</p>
+    </div>
+    <div id="notesGrid" class="notes-grid"></div>
+  </div>
+</div>
+
+<!-- Side Menu -->
+<div class="overlay" id="overlay"></div>
+<div class="side-menu" id="sideMenu">
+  <div class="side-menu-header">
+    <h2>Navigation</h2>
+    <button id="closeMenu">✕</button>
+  </div>
+  <div class="side-menu-content">
+    <h3>Navigation</h3>
+    <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;">
+      <button id="chatButton" class="nav-button">💬 Chat</button>
+      <button id="explorerButton" class="nav-button active">📝 Note Explorer</button>
+    </div>
+    
+    <h3>Filter Options</h3>
+    <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:20px;">
+      <button id="showAllBtn" class="nav-button">📋 All Notes</button>
+      <button id="showCompletedBtn" class="nav-button secondary">✅ Completed</button>
+      <button id="showPendingBtn" class="nav-button secondary">⏳ Pending</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// Elements
+const menuBtn = document.getElementById("menuBtn");
+const sideMenu = document.getElementById("sideMenu");
+const overlay = document.getElementById("overlay");
+const closeMenu = document.getElementById("closeMenu");
+const searchInput = document.getElementById("searchInput");
+const refreshBtn = document.getElementById("refreshBtn");
+const notesGrid = document.getElementById("notesGrid");
+const loadingState = document.getElementById("loadingState");
+const emptyState = document.getElementById("emptyState");
+
+// Navigation elements
+const chatButton = document.getElementById("chatButton");
+const explorerButton = document.getElementById("explorerButton");
+
+// Filter elements
+const showAllBtn = document.getElementById("showAllBtn");
+const showCompletedBtn = document.getElementById("showCompletedBtn");
+const showPendingBtn = document.getElementById("showPendingBtn");
+
+// State
+let allNotes = [];
+let filteredNotes = [];
+let currentFilter = 'all';
+
+// WebSocket connection
+let ws = null;
+
+// Initialize
+document.addEventListener('DOMContentLoaded', function() {
+  initializeWebSocket();
+  setupEventListeners();
+  loadNotes();
+});
+
+// WebSocket initialization
+function initializeWebSocket() {
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  // Use localhost as fallback if hostname is empty (DroidScript case)
+  const hostname = window.location.hostname || 'localhost';
+  const wsUrl = `${protocol}//${hostname}:8080`;
+  
+  console.log('Connecting to WebSocket:', wsUrl);
+  ws = new WebSocket(wsUrl);
+  
+  ws.onopen = function() {
+    console.log('Connected to WebSocket');
+    // Request all notes
+    ws.send(JSON.stringify({ type: "get_all_notes" }));
+  };
+  
+  ws.onmessage = function(event) {
+    const data = JSON.parse(event.data);
+    handleWebSocketMessage(data);
+  };
+  
+  ws.onclose = function() {
+    console.log('WebSocket connection closed');
+    // Try to reconnect after 3 seconds
+    setTimeout(initializeWebSocket, 3000);
+  };
+  
+  ws.onerror = function(error) {
+    console.error('WebSocket error:', error);
+  };
+}
+
+// Handle WebSocket messages
+function handleWebSocketMessage(data) {
+  switch(data.type) {
+    case 'all_notes':
+      allNotes = data.notes || [];
+      applyCurrentFilter();
+      renderNotes();
+      break;
+    case 'note_updated':
+      // Refresh notes when a note is updated
+      loadNotes();
+      break;
+    case 'note_created':
+      // Refresh notes when a new note is created
+      loadNotes();
+      break;
+    case 'note_deleted':
+      // Refresh notes when a note is deleted
+      loadNotes();
+      break;
+  }
+}
+
+// Setup event listeners
+function setupEventListeners() {
+  // Side menu
+  menuBtn.onclick = () => {
+    sideMenu.classList.add("open");
+    overlay.classList.add("show");
+  };
+  
+  closeMenu.onclick = () => {
+    sideMenu.classList.remove("open");
+    overlay.classList.remove("show");
+  };
+  
+  overlay.onclick = () => {
+    sideMenu.classList.remove("open");
+    overlay.classList.remove("show");
+  };
+  
+  // Navigation
+  chatButton.onclick = () => {
+    window.location.href = 'index.html';
+  };
+  
+  explorerButton.onclick = () => {
+    // Already on explorer page
+    sideMenu.classList.remove("open");
+    overlay.classList.remove("show");
+  };
+  
+  // Search
+  searchInput.addEventListener('input', function() {
+    applyCurrentFilter();
+    renderNotes();
+  });
+  
+  // Refresh
+  refreshBtn.onclick = () => {
+    loadNotes();
+  };
+  
+  // Filters
+  showAllBtn.onclick = () => setFilter('all');
+  showCompletedBtn.onclick = () => setFilter('completed');
+  showPendingBtn.onclick = () => setFilter('pending');
+}
+
+// Set filter
+function setFilter(filter) {
+  currentFilter = filter;
+  
+  // Update button states
+  document.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('active'));
+  if (filter === 'all') showAllBtn.classList.add('active');
+  else if (filter === 'completed') showCompletedBtn.classList.add('active');
+  else if (filter === 'pending') showPendingBtn.classList.add('active');
+  
+  applyCurrentFilter();
+  renderNotes();
+}
+
+// Apply current filter
+function applyCurrentFilter() {
+  const searchTerm = searchInput.value.toLowerCase();
+  
+  filteredNotes = allNotes.filter(note => {
+    // Search filter
+    const matchesSearch = !searchTerm || 
+      note.title.toLowerCase().includes(searchTerm) ||
+      (note.description && note.description.toLowerCase().includes(searchTerm));
+    
+    // Status filter
+    let matchesStatus = true;
+    if (currentFilter === 'completed') {
+      matchesStatus = note.done === true;
+    } else if (currentFilter === 'pending') {
+      matchesStatus = note.done !== true;
+    }
+    
+    return matchesSearch && matchesStatus;
+  });
+}
+
+// Load notes
+function loadNotes() {
+  loadingState.style.display = 'block';
+  emptyState.style.display = 'none';
+  notesGrid.style.display = 'none';
+  
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({ type: "get_all_notes" }));
+  } else {
+    // If WebSocket is not ready, show empty state
+    setTimeout(() => {
+      loadingState.style.display = 'none';
+      emptyState.style.display = 'block';
+    }, 1000);
+  }
+}
+
+// Render notes
+function renderNotes() {
+  loadingState.style.display = 'none';
+  
+  if (filteredNotes.length === 0) {
+    emptyState.style.display = 'block';
+    notesGrid.style.display = 'none';
+    return;
+  }
+  
+  emptyState.style.display = 'none';
+  notesGrid.style.display = 'grid';
+  
+  // Sort notes by creation date (newest first)
+  const sortedNotes = [...filteredNotes].sort((a, b) => {
+    const dateA = new Date(a.creation_date || 0);
+    const dateB = new Date(b.creation_date || 0);
+    return dateB - dateA;
+  });
+  
+  notesGrid.innerHTML = sortedNotes.map(note => createNoteCard(note)).join('');
+}
+
+// Create note card HTML
+function createNoteCard(note) {
+  const isCompleted = note.done === true;
+  const isParent = !note.parent_id;
+  const hasSubNotes = note.subNotes && note.subNotes.length > 0;
+  const subNotesCount = hasSubNotes ? note.subNotes.length : 0;
+  
+  const statusText = isCompleted ? 'Completed' : 'Pending';
+  const statusClass = isCompleted ? 'completed' : 'pending';
+  
+  const createdAt = note.creation_date ? new Date(note.creation_date).toLocaleDateString() : 'Unknown';
+  
+  return `
+    <div class="note-card ${isCompleted ? 'completed' : ''}" data-note-id="${note.id}">
+      <div class="note-header">
+        <div class="note-title">${escapeHtml(note.title)}</div>
+        <div class="note-actions">
+          ${isParent ? '<span class="parent-indicator" title="Parent Note">P</span>' : ''}
+          <button class="note-menu-btn" data-note-id="${note.id}" title="More actions">⋯</button>
+        </div>
+      </div>
+      ${note.description ? `<div class="note-description">${escapeHtml(note.description)}</div>` : ''}
+      ${hasSubNotes ? `<div class="sub-notes">📝 <span class="sub-notes-count">${subNotesCount}</span> sub-notes</div>` : ''}
+      <div class="note-meta">
+        <span class="note-id">#${note.id}</span>
+        <span class="note-date">${createdAt}</span>
+        <span class="note-status ${statusClass}">${statusText}</span>
+      </div>
+    </div>
+  `;
+}
+
+// Escape HTML to prevent XSS
+function escapeHtml(text) {
+  if (!text) return '';
+  const div = document.createElement('div');
+  div.textContent = text;
+  return div.innerHTML;
+}
+
+// Handle note card clicks
+document.addEventListener('click', function(e) {
+  // Check if it's a menu button click
+  if (e.target.classList.contains('note-menu-btn')) {
+    e.stopPropagation(); // Prevent card click
+    const noteId = e.target.getAttribute('data-note-id');
+    showNoteMenu(noteId);
+    return;
+  }
+  
+  // Check if it's a note card click (but not on menu button)
+  const noteCard = e.target.closest('.note-card');
+  if (noteCard && !e.target.closest('.note-actions')) {
+    const noteId = noteCard.getAttribute('data-note-id');
+    if (noteId) {
+      // Navigate to chat with this note selected
+      window.location.href = `index.html?note=${noteId}`;
+    }
+  }
+});
+
+// Show note menu (placeholder for future functionality)
+function showNoteMenu(noteId) {
+  // For now, just show an alert - you can implement a proper menu later
+  const note = allNotes.find(n => n.id === noteId);
+  if (note) {
+    alert(`Note Menu for: "${note.title}"\n\nFuture options:\n• Open in Chat\n• Edit Note\n• Mark as Done\n• Delete Note\n• Share Note`);
+  }
+}
+
+// Handle window resize
+window.addEventListener('resize', function() {
+  // Re-render notes to adjust grid layout
+  renderNotes();
+});
+</script>
+</body>
+</html>
