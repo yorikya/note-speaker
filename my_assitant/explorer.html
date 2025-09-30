@@ -396,8 +396,8 @@ document.addEventListener('click', function(e) {
   if (noteCard && !e.target.closest('.note-actions')) {
     const noteId = noteCard.getAttribute('data-note-id');
     if (noteId) {
-      // Navigate to chat with this note selected
-      window.location.href = `index.html?note=${noteId}`;
+      // Navigate to chat and automatically execute /findbyid command
+      window.location.href = `index.html?findbyid=${noteId}`;
     }
   }
 });

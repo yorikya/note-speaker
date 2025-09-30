@@ -543,6 +543,9 @@ function connect(){
     addMsg('Connected to DroidScript backend','sys');
     // Load available commands from backend
     loadAvailableCommands();
+    
+    // Check for URL parameters to auto-execute commands
+    handleUrlParameters();
   };
   ws.onclose= ()=>addMsg('Disconnected from backend','sys');
   ws.onerror= e=>addMsg('WebSocket error','sys');
@@ -745,6 +748,38 @@ async function speakText(text) {
     }
   } catch (error) {
     addMsg("❌ Cannot read message: No internet connection", "sys");
+  }
+}
+
+/* ---------- URL Parameter Handling ---------- */
+function handleUrlParameters() {
+  const urlParams = new URLSearchParams(window.location.search);
+  const findbyid = urlParams.get('findbyid');
+  
+  if (findbyid) {
+    // Auto-execute /findbyid command
+    console.log('Auto-executing /findbyid command for note:', findbyid);
+    addMsg(`Auto-finding note ID: ${findbyid}`, 'sys');
+    
+    // Send the command to the backend
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: 'chat',
+        text: `/findbyid ${findbyid}`,
+        lang: Settings.lang
+      }));
+    } else {
+      // If WebSocket is not ready, wait a bit and try again
+      setTimeout(() => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'chat',
+            text: `/findbyid ${findbyid}`,
+            lang: Settings.lang
+          }));
+        }
+      }, 1000);
+    }
   }
 }
 
