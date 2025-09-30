@@ -236,6 +236,11 @@ function generateDynamicCommands() {
       
       console.log("DEBUG: Generating command:", cmd.command, "commandText:", commandText, "requiresParam:", cmd.requiresParam);
       
+      // Add description to the button text
+      if (cmd.description) {
+        buttonText += ` <span style="opacity: 0.6; font-size: 0.85em; font-style: italic;">[${cmd.description}]</span>`;
+      }
+      
       // Add examples for commands that need parameters
       if (cmd.requiresParam && cmd.examples && cmd.examples.length > 0) {
         const example = cmd.examples[0];

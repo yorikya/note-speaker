@@ -78,3 +78,19 @@ Assistant: "Action: create_note (confidence: 1) Title: קניות"
 ## Ready for Deployment! 🚀
 
 The `note_secretary_router.js` file is now a complete DroidScript application that can be deployed directly.
+
+Commands:
+```
+1. `/findnote`
+2. `findbyid`
+3. `/createnote`
+4. `/showparent`
+
+and the find option (1,2) has sub commands which is handles:
+1. `/editdescription`
+2. `/markdone`
+3. `/delete`
+4. `/createsubnote`
+5. `/talkai`
+6. `/selectsubnote`
+```

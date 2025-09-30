@@ -16,13 +16,13 @@ var StateManager = {
     // -------- AI Conversation Management --------
     aiConversationMode: null,
     aiConversationNote: null,
+    aiConversationHistory: [],
     
     // -------- Pending Operations State --------
     pendingNoteCreation: null,
     pendingNoteDeletion: null,
     pendingNoteMarkDone: null,
     pendingSubNoteCreation: null,
-    pendingStoryCreation: null,
     pendingCommandCompletion: null,
     
     // -------- Story Editing Mode State --------
@@ -63,6 +63,30 @@ var StateManager = {
     clearAiConversationMode: function() {
         this.aiConversationMode = null;
         this.aiConversationNote = null;
+        this.aiConversationHistory = [];
+    },
+    
+    addToAiConversationHistory: function(userMessage, aiResponse) {
+        if (this.aiConversationHistory.length === 0) {
+            // Initialize conversation history
+            this.aiConversationHistory = [];
+        }
+        
+        // Add the conversation turn
+        this.aiConversationHistory.push({
+            user: userMessage,
+            ai: aiResponse,
+            timestamp: new Date().toISOString()
+        });
+        
+        // Keep only last 10 conversation turns to avoid memory issues
+        if (this.aiConversationHistory.length > 10) {
+            this.aiConversationHistory = this.aiConversationHistory.slice(-10);
+        }
+    },
+    
+    getAiConversationHistory: function() {
+        return this.aiConversationHistory;
     },
     
     // -------- Pending Note Creation Functions --------
@@ -117,18 +141,6 @@ var StateManager = {
         this.pendingSubNoteCreation = null;
     },
     
-    // -------- Pending Story Creation Functions --------
-    setPendingStoryCreation: function(title) {
-        this.pendingStoryCreation = { title: title, description: "" };
-    },
-    
-    getPendingStoryCreation: function() {
-        return this.pendingStoryCreation;
-    },
-    
-    clearPendingStoryCreation: function() {
-        this.pendingStoryCreation = null;
-    },
     
     // -------- Story Editing Mode Functions --------
     setStoryEditingMode: function(noteId, noteTitle) {

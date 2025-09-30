@@ -609,4 +609,118 @@ Based on your note: "${noteContext}"`;
         return response;
     },
     
+    // -------- Enhanced Note Context Response with History --------
+    generateNoteContextResponseWithHistory: function(message, note, conversationHistory) {
+        console.log("DEBUG: generateNoteContextResponseWithHistory - note parameter:", note);
+        console.log("DEBUG: generateNoteContextResponseWithHistory - note title:", note ? note.title : "undefined");
+        console.log("DEBUG: generateNoteContextResponseWithHistory - conversation history length:", conversationHistory ? conversationHistory.length : 0);
+        
+        if (!note) {
+            return "I need more context about your note to help you effectively. Please make sure you're in a note context.";
+        }
+        
+        // Analyze the note context to determine the best approach
+        var contextType = this.analyzeNoteContext(note);
+        console.log("DEBUG: Detected context type:", contextType);
+        
+        // Build comprehensive note context
+        var context = this.buildNoteContext(note);
+        console.log("DEBUG: generateNoteContextResponseWithHistory - built context:", context);
+        
+        // Build conversation history context
+        var historyContext = "";
+        if (conversationHistory && conversationHistory.length > 0) {
+            historyContext = "\n\n**Previous Conversation:**\n";
+            for (var i = 0; i < conversationHistory.length; i++) {
+                var turn = conversationHistory[i];
+                historyContext += "User: " + turn.user + "\n";
+                historyContext += "AI: " + turn.ai + "\n\n";
+            }
+        }
+        
+        // Create smart prompt based on context type and conversation history
+        var smartPrompt = this.getSmartPromptWithHistory(contextType, context, message, historyContext);
+        console.log("DEBUG: Generated smart prompt with history for context type:", contextType);
+        
+        // Generate smart response with conversation context
+        var response = this.generateSmartResponseWithHistory(message, context, contextType, historyContext);
+        console.log("DEBUG: Generated smart response with history, length:", response.length);
+        
+        return response;
+    },
+    
+    // -------- Helper Functions for Conversation History --------
+    getSmartPromptWithHistory: function(contextType, context, message, historyContext) {
+        var basePrompt = this.getSmartPrompt(contextType, context, message);
+        return basePrompt + historyContext;
+    },
+    
+    generateSmartResponseWithHistory: function(message, context, contextType, historyContext) {
+        // For now, use the existing smart response but include conversation context
+        var baseResponse = this.generateSmartResponse(message, context, contextType);
+        
+        // If there's conversation history, modify the response to be more conversational
+        if (historyContext && historyContext.trim() !== "") {
+            // Check if the message is a follow-up question
+            var isFollowUp = /\b(what|how|when|where|why|which|who)\b/i.test(message) || 
+                            /\b(you|your|suggested|recommended|said|mentioned)\b/i.test(message);
+            
+            if (isFollowUp) {
+                // Make the response more conversational and reference previous context
+                return this.makeResponseConversational(baseResponse, message, historyContext);
+            }
+        }
+        
+        return baseResponse;
+    },
+    
+    makeResponseConversational: function(baseResponse, message, historyContext) {
+        // Extract key information from the conversation history
+        var lastAiResponse = "";
+        if (historyContext.includes("AI:")) {
+            var aiParts = historyContext.split("AI:");
+            if (aiParts.length > 1) {
+                lastAiResponse = aiParts[aiParts.length - 1].trim();
+            }
+        }
+        
+        // Modify the response to be more conversational
+        var conversationalResponse = baseResponse;
+        
+        // If the user is asking about previous suggestions, reference them
+        if (/\b(what|you|suggested|recommended)\b/i.test(message)) {
+            if (lastAiResponse.includes("Time Estimation") || lastAiResponse.includes("⏱️")) {
+                conversationalResponse = "Based on my previous time estimation, here's what I suggest you start with:\n\n" + 
+                                      this.extractActionableSteps(baseResponse);
+            } else if (lastAiResponse.includes("Actionable Next Steps") || lastAiResponse.includes("🎯")) {
+                conversationalResponse = "Following up on my previous suggestions, here are the specific next steps:\n\n" + 
+                                      this.extractActionableSteps(baseResponse);
+            } else {
+                conversationalResponse = "Building on our previous discussion, here's what I recommend:\n\n" + baseResponse;
+            }
+        }
+        
+        return conversationalResponse;
+    },
+    
+    extractActionableSteps: function(response) {
+        // Extract actionable steps from the response
+        var steps = [];
+        var lines = response.split('\n');
+        
+        for (var i = 0; i < lines.length; i++) {
+            var line = lines[i].trim();
+            if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*') || 
+                line.match(/^\d+\./) || line.includes('Start with') || line.includes('Begin by')) {
+                steps.push(line);
+            }
+        }
+        
+        if (steps.length > 0) {
+            return steps.slice(0, 5).join('\n'); // Return first 5 actionable steps
+        }
+        
+        return response; // Fallback to original response
+    }
+    
 };

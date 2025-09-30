@@ -247,7 +247,6 @@ var CommandRouter = {
             // Map command prefixes to actions
             var commandMap = {
                 '/createnote': 'slash_create_note',
-                '/createstory': 'slash_create_story', 
                 '/findnote': 'slash_find_note',
                 '/findbyid': 'slash_find_by_id',
                 '/showparents': 'slash_show_parents',
@@ -300,16 +299,15 @@ var CommandRouter = {
         
         // Check for confirmation responses when there are pending states
         var pendingNote = StateManager.getPendingNoteCreation();
-        var pendingStory = StateManager.getPendingStoryCreation();
         var pendingDeletion = StateManager.getPendingNoteDeletion();
         var pendingMarkDone = StateManager.getPendingNoteMarkDone();
         var pendingSubNote = StateManager.getPendingSubNoteCreation();
         var pendingUpdate = StateManager.getPendingStoryUpdate();
         
         console.log("DEBUG: detectIntent - checking for confirmation responses");
-        console.log("DEBUG: detectIntent - pending states - Note:", pendingNote, "Story:", pendingStory, "Deletion:", pendingDeletion, "MarkDone:", pendingMarkDone, "SubNote:", pendingSubNote, "Update:", pendingUpdate);
+        console.log("DEBUG: detectIntent - pending states - Note:", pendingNote, "Deletion:", pendingDeletion, "MarkDone:", pendingMarkDone, "SubNote:", pendingSubNote, "Update:", pendingUpdate);
         
-        if (pendingNote || pendingStory || pendingDeletion || pendingMarkDone || pendingSubNote || pendingUpdate) {
+        if (pendingNote || pendingDeletion || pendingMarkDone || pendingSubNote || pendingUpdate) {
             console.log("DEBUG: detectIntent - found pending states, checking for confirmation patterns");
             // Check for yes/no responses
             var isHebrew = (lang === "he");
