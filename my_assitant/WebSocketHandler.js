@@ -685,43 +685,20 @@ var WebSocketHandler = {
             return "I didn't understand that. Try saying: 'create a note about groceries' or 'find my notes'";
         }
         
-        if (r.action === "gemini_question") {
-            var question = r.params?.question;
-            if (question) {
-                // Note: No chat history for general questions - keep it simple
-                
-                // Create prompt for Gemini
-                var prompt = AIService.createGeneralQuestionPrompt(question);
-                
-                // Call Gemini API
-                AIService.callGeminiForQuestion(prompt, function(response) {
-                    if (response) {
-                        // Send response to user
-                        WebSocketHandler.broadcast({
-                            type: "reply",
-                            text: response
-                        });
-                    } else {
-                        // Fallback response
-                        var fallbackResponse = "I'm having trouble processing your question right now. Please try again or use one of the available commands.";
-                        WebSocketHandler.broadcast({
-                            type: "reply",
-                            text: fallbackResponse
-                        });
-                    }
-                });
-                
-                // Return immediate response
-                if (isHebrew) {
-                    return "🤖 שואל את Gemini...";
-                }
-                return "🤖 Asking Gemini...";
-            }
-            
+        if (r.action === "unknown_command") {
             if (isHebrew) {
-                return "לא הבנתי את השאלה שלך.";
+                return "לא הבנתי את הפקודה. נסה להשתמש בפקודות הזמינות או אמור '/help' לרשימת פקודות.";
             }
-            return "I didn't understand your question.";
+            return "I didn't understand that command. Try using the available commands or say '/help' for a list of commands.";
+        }
+        
+        if (r.action === "gemini_question") {
+            // This should only happen when explicitly requested via /talkai command
+            // For now, redirect to help since AI should only be used in specific contexts
+            if (isHebrew) {
+                return "🤖 AI זמין רק במצב שיחה עם פתק ספציפי. השתמש ב-'/talkai' כדי להתחיל שיחה עם AI על פתק.";
+            }
+            return "🤖 AI is only available when talking with a specific note. Use '/talkai' to start an AI conversation about a note.";
         }
         
         // Handle slash commands first

@@ -245,25 +245,25 @@ var CommandRouter = {
             console.log("DEBUG: Slash command detected:", command, "with params:", params);
             
             // Map command prefixes to actions
-                var commandMap = {
-                    '/createnote': 'slash_create_note',
-                    '/createstory': 'slash_create_story', 
-                    '/findnote': 'slash_find_note',
-                    '/findbyid': 'slash_find_by_id',
-                    '/showparents': 'slash_show_parents',
-                    '/help': 'slash_help',
-                    '/editdescription': 'slash_editdescription',
-                    '/editdesc': 'slash_editdescription',
-                    '/markdone': 'slash_markdone',
-                    '/delete': 'slash_delete',
-                    '/createsub': 'slash_createsub',
-                    '/talkai': 'slash_talkai',
-                    '/selectsubnote': 'slash_selectsubnote',
-                    '/selectsub': 'slash_selectsubnote',
-                    '/sub': 'slash_selectsubnote',
-                    '/stopediting': 'slash_stopediting',
-                    '/cancel': 'slash_cancel'
-                };
+            var commandMap = {
+                '/createnote': 'slash_create_note',
+                '/createstory': 'slash_create_story', 
+                '/findnote': 'slash_find_note',
+                '/findbyid': 'slash_find_by_id',
+                '/showparents': 'slash_show_parents',
+                '/help': 'slash_help',
+                '/editdescription': 'slash_editdescription',
+                '/editdesc': 'slash_editdescription',
+                '/markdone': 'slash_markdone',
+                '/delete': 'slash_delete',
+                '/createsub': 'slash_createsub',
+                '/talkai': 'slash_talkai',
+                '/selectsubnote': 'slash_selectsubnote',
+                '/selectsub': 'slash_selectsubnote',
+                '/sub': 'slash_selectsubnote',
+                '/stopediting': 'slash_stopediting',
+                '/cancel': 'slash_cancel'
+            };
             
             var action = commandMap[command];
             if (action) {
@@ -273,6 +273,29 @@ var CommandRouter = {
                 console.log("DEBUG: Unknown slash command:", command);
                 return {action: "unknown_slash_command", params: {command: command}, confidence: 0.8};
             }
+        }
+        
+        // Check for common user intents that should map to commands
+        var lowerText = text.toLowerCase().trim();
+        
+        // Create note patterns
+        if (/\b(create|make|add|new)\s+(note|task|item)\b/i.test(text) || 
+            /\b(create|make|add|new)\s+(a\s+)?note\b/i.test(text)) {
+            console.log("DEBUG: Detected create note intent");
+            return {action: "slash_create_note", params: {hasParameter: false}, confidence: 0.8};
+        }
+        
+        // Find note patterns  
+        if (/\b(find|search|look|show)\s+(note|task|item)s?\b/i.test(text) ||
+            /\b(find|search|look|show)\s+(my\s+)?notes?\b/i.test(text)) {
+            console.log("DEBUG: Detected find note intent");
+            return {action: "slash_find_note", params: {hasParameter: false}, confidence: 0.8};
+        }
+        
+        // Help patterns
+        if (/\b(help|what|how|commands|available)\b/i.test(text)) {
+            console.log("DEBUG: Detected help intent");
+            return {action: "slash_help", params: {}, confidence: 0.8};
         }
         
         // Check for confirmation responses when there are pending states
@@ -321,8 +344,8 @@ var CommandRouter = {
             console.log("DEBUG: detectIntent - no confirmation patterns matched");
         }
         
-        // If no command matched, treat as free text question for Gemini
-        return {action:"gemini_question", params:{question: text}, confidence:0.5};
+        // If no command matched, treat as unknown command and show help
+        return {action:"unknown_command", params:{text: text}, confidence:0.5};
     },
     
     // -------- Command Processing Helpers --------
