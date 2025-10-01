@@ -293,8 +293,8 @@ var WebSocketHandler = {
         }
         
         // Check for yes/no responses to confirmations AFTER setting pending states
-        // But skip this check if we're waiting for a sub-note name
-        if (!StateManager.getPendingSubNoteCreation()) {
+        // But skip this check if we're waiting for a sub-note name or in AI conversation mode
+        if (!StateManager.getPendingSubNoteCreation() && det.action !== "ai_conversation") {
             var response = this.handleConfirmationResponse(o.text);
             if (response) {
                 console.log("DEBUG: handleConfirmationResponse returned:", response);
@@ -302,7 +302,63 @@ var WebSocketHandler = {
                 return;
             }
         } else {
-            console.log("DEBUG: Skipping handleConfirmationResponse because waiting for sub-note name");
+            if (StateManager.getPendingSubNoteCreation()) {
+                console.log("DEBUG: Skipping handleConfirmationResponse because waiting for sub-note name");
+            } else if (det.action === "ai_conversation") {
+                console.log("DEBUG: Skipping handleConfirmationResponse because in AI conversation mode");
+            }
+        }
+        
+        // Handle AI conversation asynchronously (before formatOutcome)
+        if (det.action === "ai_conversation") {
+            var message = det.params?.message;
+            if (message) {
+                var note = StateManager.getAiConversationNote();
+                var conversationHistory = StateManager.getAiConversationHistory();
+                
+                var noteContext = "📝 **Note: " + note.title + "**";
+                if (note.description) {
+                    noteContext += "\nDescription: " + note.description;
+                }
+                
+                // Build conversation history context
+                var historyContext = "";
+                if (conversationHistory && conversationHistory.length > 0) {
+                    historyContext = "\n\n**Previous Conversation:**\n";
+                    for (var i = 0; i < conversationHistory.length; i++) {
+                        var turn = conversationHistory[i];
+                        historyContext += "User: " + turn.user + "\n";
+                        historyContext += "AI: " + turn.ai + "\n\n";
+                    }
+                }
+                
+                // Create a direct prompt for Gemini with the user's question and note context
+                var prompt = noteContext + historyContext + "\n\nUser's current question: " + message;
+                
+                // Call Gemini directly with the user's question and context
+                var self = this;
+                var clientIp = ip;
+                var clientId = id;
+                AIService.callGeminiForQuestion(prompt, function(geminiResponse) {
+                    console.log("DEBUG: Gemini response received for AI conversation, length:", geminiResponse ? geminiResponse.length : 0);
+                    
+                    // Check if response is valid
+                    if (!geminiResponse || geminiResponse.trim() === "") {
+                        console.log("DEBUG: Empty Gemini response, using fallback");
+                        geminiResponse = "I'm sorry, I couldn't process your question right now. Please try again.";
+                    }
+                    
+                    // Add to conversation history
+                    StateManager.addToAiConversationHistory(message, geminiResponse);
+                    
+                    // Send the response back to the client
+                    self.sendToClient({ type: "reply", text: geminiResponse }, clientIp, clientId);
+                });
+                
+                // Send temporary response while Gemini processes
+                this.sendToClient({ type: "reply", text: "🤖 Processing your question..." }, ip, id);
+                return;
+            }
         }
         
         var out = this.formatOutcome(det);
@@ -640,6 +696,13 @@ var WebSocketHandler = {
                 requiresParam: false,
                 contexts: ["find_context"] // Only when a note is found
             },
+            slash_savelastmessage: { 
+                category: "🤖 AI", 
+                description: "Saving last AI response as sub-note",
+                examples: ["/savelastmessage"],
+                requiresParam: false,
+                contexts: ["ai_conversation"] // Only during AI conversation
+            },
             slash_selectsubnote: { 
                 category: "🔍 Navigate", 
                 description: "Selecting a sub-note by number",
@@ -714,6 +777,7 @@ var WebSocketHandler = {
                         'slash_delete': '/delete',
                         'slash_createsub': '/createsub',
                         'slash_talkai': '/talkai',
+                        'slash_savelastmessage': '/savelastmessage',
                         'slash_selectsubnote': '/selectsubnote',
                         'slash_stopediting': '/stopediting',
                         'slash_back': '/back',
@@ -1268,25 +1332,9 @@ var WebSocketHandler = {
         
         // Handle AI conversation mode
         if (r.action === "ai_conversation") {
-            var message = r.params?.message;
-            if (message) {
-                // Get the current note context
-                var note = StateManager.getAiConversationNote();
-                var conversationHistory = StateManager.getAiConversationHistory();
-                
-                // Use AIService to generate context-aware response with conversation history
-                var response = AIService.generateNoteContextResponseWithHistory(message, note, conversationHistory);
-                
-                // Add to conversation history
-                StateManager.addToAiConversationHistory(message, response);
-                
-                return response;
-            }
-            
-            if (isHebrew) {
-                return "לא הבנתי את ההודעה שלך.";
-            }
-            return "I didn't understand your message.";
+            // AI conversation is now handled asynchronously in handleChatMessage
+            // This should not be reached, but return a fallback just in case
+            return "🤖 Processing your question...";
         }
         
         // Find sub-commands as slash commands
@@ -1321,6 +1369,67 @@ var WebSocketHandler = {
                 return "🤖 התחלתי שיחה עם AI על הפתק '" + note.title + "'. אמור 'cancel' לסיום השיחה.";
             }
             return "🤖 Started AI conversation about note '" + note.title + "'. Say 'cancel' to end the conversation.";
+        }
+        if (r.action === "slash_savelastmessage") {
+            // Check if we're in AI conversation mode
+            var aiConversationMode = StateManager.getAiConversationMode();
+            if (!aiConversationMode) {
+                if (isHebrew) {
+                    return "לא נמצא במצב שיחה עם AI. השתמש ב-/talkai כדי להתחיל שיחה.";
+                }
+                return "Not in AI conversation mode. Use /talkai to start a conversation.";
+            }
+            
+            // Get the AI conversation note
+            var aiNote = StateManager.getAiConversationNote();
+            if (!aiNote) {
+                if (isHebrew) {
+                    return "לא נמצא פתק לשיחה עם AI.";
+                }
+                return "No note found for AI conversation.";
+            }
+            
+            // Get the last AI response from conversation history
+            var conversationHistory = StateManager.getAiConversationHistory();
+            if (!conversationHistory || conversationHistory.length === 0) {
+                if (isHebrew) {
+                    return "לא נמצאו הודעות AI לשמירה.";
+                }
+                return "No AI messages found to save.";
+            }
+            
+            // Get the last AI response
+            var lastTurn = conversationHistory[conversationHistory.length - 1];
+            var lastAiResponse = lastTurn.ai;
+            
+            // Create a short title from the first few words of the AI response
+            var titleWords = lastAiResponse.split(' ').slice(0, 5).join(' ');
+            if (titleWords.length > 50) {
+                titleWords = titleWords.substring(0, 47) + "...";
+            }
+            
+            // Add date prefix to description
+            var now = new Date();
+            var datePrefix = now.toLocaleDateString() + " " + now.toLocaleTimeString() + " - ";
+            var description = datePrefix + lastAiResponse;
+            
+            // Create the sub-note
+            try {
+                var subNote = NoteManager.createNote(titleWords, description, aiNote.id);
+                
+                // Clear AI conversation mode
+                StateManager.clearAiConversationMode();
+                
+                if (isHebrew) {
+                    return "✅ שמרתי את התגובה האחרונה של AI כתת-פתק: '" + titleWords + "' (ID: " + subNote.id + ")";
+                }
+                return "✅ Saved last AI response as sub-note: '" + titleWords + "' (ID: " + subNote.id + ")";
+            } catch (error) {
+                if (isHebrew) {
+                    return "❌ שגיאה בשמירת תת-הפתק: " + error.message;
+                }
+                return "❌ Error saving sub-note: " + error.message;
+            }
         }
         if (r.action === "slash_selectsubnote") {
             return this.formatOutcome({action: "find_sub_select", params: r.params, confidence: 1});

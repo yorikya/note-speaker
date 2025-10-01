@@ -272,6 +272,7 @@ var CommandRouter = {
                 '/delete': 'slash_delete',
                 '/createsub': 'slash_createsub',
                 '/talkai': 'slash_talkai',
+                '/savelastmessage': 'slash_savelastmessage',
                 '/selectsubnote': 'slash_selectsubnote',
                 '/selectsub': 'slash_selectsubnote',
                 '/sub': 'slash_selectsubnote',

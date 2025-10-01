@@ -67,40 +67,24 @@ var AIService = {
             var apiKey = this.getApiKey();
             console.log("DEBUG: Using API key for question: " + apiKey.substring(0, 10) + "...");
             
-            // For now, create a simple response since HTTP is not available
-            console.log("DEBUG: Creating response for question");
+            // Extract the user's question from the prompt
+            var questionMatch = prompt.match(/User's current question: (.+)/);
+            var question = questionMatch ? questionMatch[1] : "";
             
-            // Try to extract the user's message from the prompt
-            var question = prompt.match(/User's current question: (.+)/) || prompt.match(/User's current message: (.+)/);
-            console.log("DEBUG: Extracted question from prompt:", question);
-            var response = "I understand your question, but I'm currently running in a limited mode. ";
+            console.log("DEBUG: Extracted question:", question);
             
-            // Extract note context from the prompt
-            var noteContext = "";
-            var contextMatch = prompt.match(/📝 \*\*Note: (.+?)\*\*/);
-            if (contextMatch) {
-                noteContext = contextMatch[1];
-                console.log("DEBUG: Note context extracted:", noteContext);
-            }
-            
-            if (question && question[1]) {
-                console.log("DEBUG: User question extracted:", question[1]);
-                var userQuestion = question[1];
-                
-                // Use the new smart response system
-                response = this.generateSmartResponse(userQuestion, noteContext, "general");
-            } else {
-                console.log("DEBUG: No question pattern matched, using fallback response");
-                response = "I'm here to help! I can assist you with questions about your notes or general topics. " +
-                          "What would you like to know?";
-            }
+            // For now, return a simple response indicating limited mode
+            // In a full implementation, this would call the Gemini API
+            var response = "I understand you're asking: '" + question + "'\n\n" +
+                          "I'm currently running in a limited mode without direct Gemini API access. " +
+                          "To get the best answers, please set up the Gemini API key and enable HTTP requests.";
             
             console.log("DEBUG: Question response created, length: " + response.length);
             callback(response);
             
         } catch (error) {
             console.log("Error calling Gemini for question: " + error.message);
-            callback(null);
+            callback("I'm sorry, I encountered an error processing your question. Please try again.");
         }
     },
     
