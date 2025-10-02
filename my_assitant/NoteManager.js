@@ -39,6 +39,7 @@ var NoteManager = {
             done_date: null,
             creation_date: new Date().toISOString(),
             tags: [],
+            images: [],
             deleted: false
         };
         
@@ -284,6 +285,55 @@ var NoteManager = {
             }
         }
         return recentNotes;
+    },
+    
+    // -------- Image Management Functions --------
+    addImageToNote: function(noteId, imagePath) {
+        for (var i = 0; i < this.notesData.notes.length; i++) {
+            if (this.notesData.notes[i].id === noteId) {
+                var note = this.notesData.notes[i];
+                if (!note.images) {
+                    note.images = [];
+                }
+                // Check if image already exists
+                if (note.images.indexOf(imagePath) === -1) {
+                    note.images.push(imagePath);
+                    note.last_updated = new Date().toISOString();
+                    this.saveNotes();
+                    return note;
+                }
+                return note; // Image already exists
+            }
+        }
+        return null;
+    },
+    
+    removeImageFromNote: function(noteId, imagePath) {
+        for (var i = 0; i < this.notesData.notes.length; i++) {
+            if (this.notesData.notes[i].id === noteId) {
+                var note = this.notesData.notes[i];
+                if (note.images) {
+                    var index = note.images.indexOf(imagePath);
+                    if (index > -1) {
+                        note.images.splice(index, 1);
+                        note.last_updated = new Date().toISOString();
+                        this.saveNotes();
+                        return note;
+                    }
+                }
+                return note;
+            }
+        }
+        return null;
+    },
+    
+    getNoteImages: function(noteId) {
+        for (var i = 0; i < this.notesData.notes.length; i++) {
+            if (this.notesData.notes[i].id === noteId) {
+                return this.notesData.notes[i].images || [];
+            }
+        }
+        return [];
     },
     
     // -------- Debug and Utility Functions --------

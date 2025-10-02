@@ -280,7 +280,12 @@ var CommandRouter = {
                 '/back': 'slash_back',
                 '/autoconfirm': 'slash_auto_confirm_on',
                 '/autoconfirmon': 'slash_auto_confirm_on',
-                '/autoconfirmoff': 'slash_auto_confirm_off'
+                '/autoconfirmoff': 'slash_auto_confirm_off',
+                '/uploadimage': 'slash_uploadimage',
+                '/testfileapis': 'slash_test_file_apis',
+                '/cleanupimages': 'slash_cleanup_images',
+                '/teststorage': 'slash_test_storage',
+                '/managestorage': 'slash_manage_storage'
             };
             
             var action = commandMap[command];

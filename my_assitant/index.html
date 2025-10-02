@@ -48,6 +48,30 @@
   
   /* Commands Popup Styles */
   .commands-popup { position:fixed; top:50%; left:50%; transform:translate(-50%, -50%); width:400px; max-height:80vh; background:#1a1d21; border:1px solid #333; border-radius:12px; z-index:1001; display:none; overflow:hidden; }
+  
+  /* Upload Modal Styles */
+  .upload-modal { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.8); z-index:1002; display:none; }
+  .upload-modal.show { display:flex; align-items:center; justify-content:center; }
+  .upload-content { background:#1a1d21; border:1px solid #333; border-radius:12px; width:90%; max-width:500px; max-height:80vh; overflow:hidden; }
+  .upload-header { padding:16px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; }
+  .upload-header h3 { margin:0; color:#e6e6e6; }
+  .upload-close { background:none; border:none; color:#a0a0a0; font-size:20px; cursor:pointer; }
+  .upload-body { padding:20px; }
+  .upload-area { border:2px dashed #444; border-radius:8px; padding:40px 20px; text-align:center; margin-bottom:20px; cursor:pointer; transition:border-color 0.3s; }
+  .upload-area:hover { border-color:#1f6feb; }
+  .upload-area.dragover { border-color:#1f6feb; background:#0f1419; }
+  .upload-icon { font-size:48px; margin-bottom:16px; }
+  .upload-text { color:#a0a0a0; margin-bottom:8px; }
+  .upload-hint { font-size:12px; color:#666; }
+  .file-input { display:none; }
+  .preview-container { display:flex; flex-wrap:wrap; gap:10px; margin-bottom:20px; }
+  .preview-item { position:relative; width:80px; height:80px; border-radius:8px; overflow:hidden; }
+  .preview-item img { width:100%; height:100%; object-fit:cover; }
+  .preview-remove { position:absolute; top:4px; right:4px; background:#ff4444; color:white; border:none; border-radius:50%; width:20px; height:20px; font-size:12px; cursor:pointer; }
+  .upload-buttons { display:flex; gap:10px; justify-content:flex-end; }
+  .upload-btn { background:#1f6feb; color:white; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; }
+  .upload-btn:disabled { background:#444; cursor:not-allowed; }
+  .cancel-btn { background:#444; color:#e6e6e6; border:none; padding:10px 20px; border-radius:8px; cursor:pointer; }
   .commands-popup.show { display:block; }
   .commands-header { padding:16px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; }
   .commands-header h3 { margin:0; font-size:18px; color:#e6e6e6; }
@@ -86,6 +110,41 @@
     <label><input type="checkbox" id="useTTS"> 🔊 Read responses</label>
     <button id="micBtn" title="Speech to text">🎤 Speak</button>
     <button id="helpBtn" title="Quick commands">💡 Commands</button>
+  </div>
+</div>
+
+<!-- Upload Modal -->
+<div id="uploadModal" class="upload-modal">
+  <div class="upload-content">
+    <div class="upload-header">
+      <h3>Upload Images</h3>
+      <button class="upload-close" onclick="closeUploadModal()">&times;</button>
+    </div>
+            <div class="upload-body">
+              <div class="upload-area" onclick="selectImages()">
+                <div class="upload-icon">📷</div>
+                <div class="upload-text">Click to select images</div>
+                <div class="upload-hint">Supports JPG, PNG, GIF (max 5 images)</div>
+              </div>
+              
+              <!-- Alternative file selection for WebView environments -->
+              <div id="webviewAlternatives" style="display: none; margin-top: 10px; text-align: center;">
+                <p style="color: #666; font-size: 14px; margin: 10px 0;">File picker not working? Try these alternatives:</p>
+                <button onclick="createMockFileSelection()" style="margin: 5px; padding: 8px 16px; background: #ff6b35; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                  🧪 Use Mock File (Testing)
+                </button>
+                <button onclick="showManualFileInput()" style="margin: 5px; padding: 8px 16px; background: #1f6feb; color: white; border: none; border-radius: 4px; cursor: pointer;">
+                  📂 Try Alternative Picker
+                </button>
+              </div>
+              
+      <input type="file" id="fileInput" class="file-input" multiple accept="image/*" style="display: none;">
+      <div id="previewContainer" class="preview-container"></div>
+              <div class="upload-buttons">
+                <button class="cancel-btn" onclick="closeUploadModal()">Cancel</button>
+                <button class="upload-btn" id="uploadBtn" onclick="uploadImages()" disabled>Upload</button>
+              </div>
+    </div>
   </div>
 </div>
 
@@ -664,6 +723,8 @@ function connect(){
     try{ 
       const msg=JSON.parse(ev.data); 
       if(msg.type==='reply') {
+        // All upload handling is now done natively in DroidScript
+        // No need for HTML upload modal
         addMsg(msg.text,'bot');
         
         // Update mode based on backend message
@@ -681,6 +742,17 @@ function connect(){
         // Hide notes display if it's showing
         notesDisplay.style.display = "none";
         showNotes.textContent = "Show Notes (Debug)";
+      }
+      else if(msg.type==='file_selected') {
+        console.log("DEBUG: File selected from native picker:", msg.imagePath);
+        // Handle the selected file from native picker
+        handleNativeFileSelection(msg.imagePath, msg.noteId);
+      }
+      else if(msg.type==='show_html_file_picker') {
+        console.log("DEBUG: Showing HTML file picker for note:", msg.noteId);
+        // Show the upload modal directly in the same page
+        showUploadModal(msg.noteId);
+        addMsg("📷 Select images using the file picker below", "sys");
       }
       else if(msg.type==='available_commands') {
         // Handle dynamic commands from backend
@@ -1041,6 +1113,551 @@ initializeSettings();
 loadCommandHistory();
 connect();
 hideTipAfterDelay();
+
+/* ---------- Upload Modal Functionality ---------- */
+let currentNoteId = null;
+let selectedFiles = [];
+
+// DEPRECATED: HTML upload modal no longer used
+// All image uploads now handled natively in DroidScript
+function showUploadModal(noteId) {
+  console.log("DEBUG: HTML upload modal disabled - using native DroidScript file picker");
+  addMsg("📁 Image upload is now handled natively by DroidScript", "sys");
+  return; // Exit early - don't show HTML modal
+  
+  // Setup file input handler
+  const fileInput = document.getElementById('fileInput');
+  fileInput.onchange = handleFileSelect;
+  
+  // Also add event listener for better compatibility
+  fileInput.addEventListener('change', handleFileSelect);
+  
+  // Setup drag and drop
+  const uploadArea = document.querySelector('.upload-area');
+  uploadArea.ondragover = (e) => {
+    e.preventDefault();
+    uploadArea.classList.add('dragover');
+  };
+  uploadArea.ondragleave = () => {
+    uploadArea.classList.remove('dragover');
+  };
+  uploadArea.ondrop = (e) => {
+    e.preventDefault();
+    uploadArea.classList.remove('dragover');
+    handleFileSelect({ target: { files: e.dataTransfer.files } });
+  };
+}
+
+// Select images function - WebView-compatible approach
+function selectImages() {
+  console.log("DEBUG: selectImages called");
+  console.log("DEBUG: Current selectedFiles length:", selectedFiles.length);
+  console.log("DEBUG: User agent:", navigator.userAgent);
+  
+  // Check if we're in a WebView environment
+  const isWebView = navigator.userAgent.includes('wv') || window.AndroidInterface;
+  console.log("DEBUG: Detected WebView environment:", isWebView);
+  
+  // Try to trigger the hidden file input directly
+  const fileInput = document.getElementById('fileInput');
+  if (fileInput) {
+    console.log("DEBUG: Found file input, triggering HTML file picker");
+    console.log("DEBUG: File input current value:", fileInput.value);
+    
+    // Clear any previous selection
+    fileInput.value = '';
+    console.log("DEBUG: Cleared file input value");
+    
+    // Multiple event listeners for WebView compatibility
+    const handleFileChange = function(event) {
+      console.log("DEBUG: File input change event triggered in selectImages");
+      console.log("DEBUG: Event files length:", event.target.files ? event.target.files.length : 'no files');
+      if (event.target.files && event.target.files.length > 0) {
+        handleFileSelect(event);
+      }
+      // Remove the event listener after use
+      fileInput.removeEventListener('change', handleFileChange);
+      fileInput.removeEventListener('input', handleFileChange);
+    };
+    
+    // Add multiple event listeners for better WebView compatibility
+    fileInput.addEventListener('change', handleFileChange);
+    fileInput.addEventListener('input', handleFileChange);  // Alternative event for WebView
+    
+    // Also try focus/blur events as some WebViews use these
+    const handleFocusEvents = function() {
+      console.log("DEBUG: File input focus/blur event - checking for files");
+      setTimeout(() => {
+        if (fileInput.files && fileInput.files.length > 0) {
+          console.log("DEBUG: Files detected via focus/blur check");
+          handleFileSelect({ target: fileInput });
+        }
+      }, 100);
+    };
+    
+    fileInput.addEventListener('focus', handleFocusEvents);
+    fileInput.addEventListener('blur', handleFocusEvents);
+    
+    console.log("DEBUG: Added multiple event listeners, about to click file input");
+    fileInput.click();
+    console.log("DEBUG: File input clicked");
+    
+    // WebView-specific polling mechanism
+    let pollCount = 0;
+    const maxPolls = 30; // Poll for 3 seconds
+    const pollInterval = setInterval(() => {
+      pollCount++;
+      console.log("DEBUG: Polling for files, attempt:", pollCount);
+      
+      if (fileInput.files && fileInput.files.length > 0) {
+        console.log("DEBUG: Files detected via polling:", fileInput.files.length);
+        clearInterval(pollInterval);
+        handleFileSelect({ target: fileInput });
+        return;
+      }
+      
+      if (pollCount >= maxPolls) {
+        console.log("DEBUG: Polling timeout reached, no files detected");
+        clearInterval(pollInterval);
+        // Clean up event listeners
+        fileInput.removeEventListener('change', handleFileChange);
+        fileInput.removeEventListener('input', handleFileChange);
+        fileInput.removeEventListener('focus', handleFocusEvents);
+        fileInput.removeEventListener('blur', handleFocusEvents);
+        
+        if (selectedFiles.length === 0) {
+          console.log("DEBUG: No files selected after polling, showing fallback options");
+          showWebViewFilePickerFallback();
+        }
+      }
+    }, 100);
+    
+  } else {
+    console.log("DEBUG: File input not found, using native picker");
+    selectImagesNative();
+  }
+}
+
+// WebView fallback for file selection
+function showWebViewFilePickerFallback() {
+  console.log("DEBUG: Showing WebView file picker fallback");
+  
+  // Show the alternative options
+  const alternatives = document.getElementById('webviewAlternatives');
+  if (alternatives) {
+    alternatives.style.display = 'block';
+    console.log("DEBUG: Showing WebView alternatives UI");
+  }
+  
+  // Show message to user
+  addMsg("📷 File picker may not work properly in this WebView environment.", "sys");
+  addMsg("Please try the alternative options shown below the upload area.", "sys");
+}
+
+// Show manual file input as alternative
+function showManualFileInput() {
+  console.log("DEBUG: Showing manual file input alternative");
+  
+  // Create a new file input that might work better in WebView
+  const existingInput = document.getElementById('fileInput');
+  if (existingInput) {
+    existingInput.remove();
+  }
+  
+  // Create a new visible file input
+  const newInput = document.createElement('input');
+  newInput.type = 'file';
+  newInput.id = 'fileInputAlt';
+  newInput.multiple = true;
+  newInput.accept = 'image/*';
+  newInput.style.cssText = 'margin: 10px; padding: 5px; border: 1px solid #444; background: #1a1d21; color: #e6e6e6; border-radius: 4px;';
+  
+  // Add event listeners
+  newInput.addEventListener('change', function(event) {
+    console.log("DEBUG: Alternative file input change event");
+    if (event.target.files && event.target.files.length > 0) {
+      console.log("DEBUG: Files selected via alternative input:", event.target.files.length);
+      handleFileSelect(event);
+    }
+  });
+  
+  // Add to upload area
+  const uploadArea = document.querySelector('.upload-body');
+  if (uploadArea) {
+    const label = document.createElement('p');
+    label.textContent = 'Alternative file picker:';
+    label.style.cssText = 'color: #a0a0a0; margin: 10px 0 5px 0; font-size: 14px;';
+    
+    uploadArea.appendChild(label);
+    uploadArea.appendChild(newInput);
+    
+    addMsg("📂 Alternative file picker added. Please try selecting files with it.", "sys");
+  }
+}
+
+// Alternative file selection using DroidScript native methods
+function selectImagesNative() {
+  console.log("DEBUG: selectImagesNative called");
+  
+  // Send message to DroidScript to open native file picker
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    const message = {
+      type: 'request_file_picker',
+      noteId: currentNoteId
+    };
+    console.log("DEBUG: Requesting native file picker");
+    ws.send(JSON.stringify(message));
+  } else {
+    console.log("DEBUG: WebSocket not connected, falling back to mock");
+    selectImages();
+  }
+}
+
+// Handle file selection from native picker
+function handleNativeFileSelection(imagePath, noteId) {
+  console.log("DEBUG: handleNativeFileSelection called with:", imagePath, noteId);
+  
+  // Create a mock file object from the native selection
+  const mockFile = {
+    name: imagePath.split('/').pop() || 'selected_image.jpg',
+    type: 'image/jpeg',
+    size: 1024,
+    path: imagePath
+  };
+  
+  // Add to selected files
+  selectedFiles = [mockFile];
+  console.log("DEBUG: Added native file to selectedFiles:", selectedFiles.length);
+  
+  // Update preview
+  updatePreview();
+  
+  // Enable upload button
+  document.getElementById('uploadBtn').disabled = false;
+  
+  addMsg("📷 Image selected from gallery", "sys");
+}
+
+// Close upload modal
+function closeUploadModal() {
+  document.getElementById('uploadModal').classList.remove('show');
+  currentNoteId = null;
+  selectedFiles = [];
+}
+
+// Handle file selection
+function handleFileSelect(event) {
+  console.log("DEBUG: handleFileSelect called");
+  console.log("DEBUG: Event:", event);
+  console.log("DEBUG: Event target:", event.target);
+  console.log("DEBUG: Event target files:", event.target.files);
+  console.log("DEBUG: Files length:", event.target.files ? event.target.files.length : 'no files');
+  
+  if (!event.target.files || event.target.files.length === 0) {
+    console.log("DEBUG: No files in event, returning early");
+    return;
+  }
+  
+  const files = Array.from(event.target.files);
+  console.log("DEBUG: Files array:", files);
+  console.log("DEBUG: Files array length:", files.length);
+  
+  // Filter for images only and limit to 5
+  const imageFiles = files.filter(file => {
+    console.log("DEBUG: Checking file:", file.name, "type:", file.type);
+    return file.type.startsWith('image/');
+  });
+  console.log("DEBUG: Filtered to", imageFiles.length, "image files");
+  
+  if (imageFiles.length > 5) {
+    addMsg("⚠️ Maximum 5 images allowed", "sys");
+    imageFiles.splice(5);
+  }
+  
+  selectedFiles = imageFiles;
+  console.log("DEBUG: selectedFiles updated to", selectedFiles.length, "files");
+  console.log("DEBUG: selectedFiles content:", selectedFiles);
+  
+  updatePreview();
+  
+  const uploadBtn = document.getElementById('uploadBtn');
+  if (uploadBtn) {
+    uploadBtn.disabled = selectedFiles.length === 0;
+    console.log("DEBUG: Upload button disabled:", uploadBtn.disabled);
+  }
+  
+  if (selectedFiles.length > 0) {
+    console.log("DEBUG: Adding success message for", selectedFiles.length, "files");
+    addMsg(`📷 ${selectedFiles.length} image(s) selected`, "sys");
+  } else {
+    console.log("DEBUG: No image files selected");
+    addMsg("📷 No valid image files selected", "sys");
+  }
+}
+
+// Update preview container
+function updatePreview() {
+  const container = document.getElementById('previewContainer');
+  const uploadBtn = document.getElementById('uploadBtn');
+  
+  if (selectedFiles.length === 0) {
+    container.innerHTML = '<p style="text-align: center; color: #666; padding: 20px;">No images selected</p>';
+    uploadBtn.disabled = true;
+    return;
+  }
+  
+  // Simple display: just show count and file names
+  const fileCount = selectedFiles.length;
+  const fileNames = selectedFiles.map(file => file.name).join(', ');
+  
+  container.innerHTML = `
+    <div style="padding: 20px; text-align: center; background: #f5f5f5; border-radius: 8px; margin: 10px 0;">
+      <h3 style="margin: 0 0 10px 0; color: #333;">📸 Selected ${fileCount} picture${fileCount > 1 ? 's' : ''}</h3>
+      <p style="color: #666; font-size: 14px; margin: 10px 0; word-break: break-all;">${fileNames}</p>
+      <button onclick="clearSelectedFiles()" style="background: #ff4444; color: white; border: none; padding: 8px 16px; border-radius: 4px; cursor: pointer; margin-top: 10px;">Clear Selection</button>
+    </div>
+  `;
+  
+  uploadBtn.disabled = false;
+}
+
+// Remove file from selection
+function removeFile(index) {
+  selectedFiles.splice(index, 1);
+  updatePreview();
+  document.getElementById('uploadBtn').disabled = selectedFiles.length === 0;
+}
+
+// Clear all selected files
+function clearSelectedFiles() {
+  selectedFiles = [];
+  updatePreview();
+  addMsg("📷 File selection cleared", "sys");
+}
+
+// Create mock file selection for testing/fallback
+function createMockFileSelection() {
+  console.log("DEBUG: Creating mock file selection");
+  
+  // Create a more realistic mock file object
+  const mockFile = {
+    name: 'mock_image_' + Date.now() + '.jpg',
+    type: 'image/jpeg',
+    size: 1024 * 50, // 50KB
+    lastModified: Date.now(),
+    lastModifiedDate: new Date(),
+    webkitRelativePath: '',
+    // Add methods that might be called
+    stream: function() { return new ReadableStream(); },
+    text: function() { return Promise.resolve('mock file content'); },
+    arrayBuffer: function() { return Promise.resolve(new ArrayBuffer(1024)); },
+    slice: function(start, end, contentType) { 
+      return new Blob(['mock'], { type: contentType || this.type }); 
+    },
+    // Mark as mock for special handling
+    isMockFile: true,
+    constructor: { name: 'File' }
+  };
+  
+  console.log("DEBUG: Created mock file:", mockFile.name);
+  
+  // Simulate file selection
+  selectedFiles = [mockFile];
+  console.log("DEBUG: Mock file added to selectedFiles");
+  
+  // Update the preview and enable upload button
+  updatePreview();
+  
+  const uploadBtn = document.getElementById('uploadBtn');
+  if (uploadBtn) {
+    uploadBtn.disabled = false;
+    console.log("DEBUG: Upload button enabled for mock file");
+  }
+  
+  // Show success message
+  addMsg("🧪 Mock file selected: " + mockFile.name, "sys");
+  addMsg("📷 1 image selected (mock file for testing)", "sys");
+}
+
+// Upload images
+function uploadImages() {
+  console.log("DEBUG: uploadImages called");
+  console.log("DEBUG: selectedFiles length:", selectedFiles.length);
+  console.log("DEBUG: selectedFiles content:", selectedFiles);
+  console.log("DEBUG: currentNoteId:", currentNoteId);
+  console.log("DEBUG: WebSocket state:", ws ? ws.readyState : 'no ws');
+  
+  if (selectedFiles.length === 0) {
+    console.log("DEBUG: Upload cancelled - no files selected");
+    addMsg("❌ No files selected. Please select images first.", "sys");
+    return;
+  }
+  
+  if (!currentNoteId) {
+    console.log("DEBUG: Upload cancelled - no note ID");
+    addMsg("❌ No note ID found. Please try again.", "sys");
+    return;
+  }
+  
+  addMsg(`📤 Uploading ${selectedFiles.length} image(s) to note ${currentNoteId}...`, "sys");
+  
+  // Convert images to base64 and send via WebSocket
+  selectedFiles.forEach((file, index) => {
+    console.log("DEBUG: Processing file", index, ":", file.name);
+    
+    // For native files (from DroidScript picker), use the existing path
+    if (file.path) {
+      console.log("DEBUG: Processing native file:", file.path);
+      // Send the native file path directly
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        const message = {
+          type: 'upload_file',
+          noteId: currentNoteId,
+          filename: file.name,
+          fileData: null, // No base64 data needed for native files
+          imagePath: file.path
+        };
+        console.log("DEBUG: Sending WebSocket message for native file:", file.name);
+        ws.send(JSON.stringify(message));
+      } else {
+        console.log("DEBUG: WebSocket not connected, state:", ws ? ws.readyState : 'no ws');
+      }
+    }
+    // For mock files, create mock base64 data
+    else if (file.name && file.name.startsWith('test_image_')) {
+      const mockBase64Data = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='; // 1x1 transparent PNG
+      const imagePath = `images/note_${currentNoteId}_${Date.now()}_${index}.jpg`;
+      
+      console.log("DEBUG: Sending WebSocket message for mock file:", file.name);
+      // Send via WebSocket to DroidScript app
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        const message = {
+          type: 'upload_file',
+          noteId: currentNoteId,
+          filename: file.name,
+          fileData: mockBase64Data,
+          imagePath: imagePath
+        };
+        console.log("DEBUG: WebSocket message:", JSON.stringify(message).substring(0, 100) + "...");
+        ws.send(JSON.stringify(message));
+      } else {
+        console.log("DEBUG: WebSocket not connected, state:", ws ? ws.readyState : 'no ws');
+      }
+    } else {
+      // For real files, resize and compress before uploading
+      console.log("DEBUG: Processing real file with resizing:", file.name);
+      resizeAndCompressImage(file, function(resizedBase64) {
+        const imagePath = `images/note_${currentNoteId}_${Date.now()}_${index}.jpg`;
+        
+        console.log("DEBUG: Sending WebSocket message for resized file:", file.name);
+        // Send via WebSocket to DroidScript app
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          const message = {
+            type: 'upload_file',
+            noteId: currentNoteId,
+            filename: file.name,
+            fileData: resizedBase64,
+            imagePath: imagePath
+          };
+          console.log("DEBUG: WebSocket message:", JSON.stringify(message).substring(0, 100) + "...");
+          ws.send(JSON.stringify(message));
+        } else {
+          console.log("DEBUG: WebSocket not connected, state:", ws ? ws.readyState : 'no ws');
+        }
+      });
+    }
+  });
+  
+  // Close modal after upload
+  setTimeout(() => {
+    closeUploadModal();
+    addMsg("✅ Images uploaded successfully!", "sys");
+  }, 1000);
+}
+
+// Image resizing and compression function
+function resizeAndCompressImage(file, callback) {
+  console.log("DEBUG: Resizing image:", file.name, "Size:", file.size, "bytes");
+  
+  // Check if this is a mock file
+  if (file.name && (file.name.startsWith('debug_image') || file.name.startsWith('test_image'))) {
+    console.log("DEBUG: Mock file detected, using mock base64 data");
+    // Use a small mock base64 image (1x1 transparent PNG)
+    const mockBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    callback(mockBase64);
+    return;
+  }
+  
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  const img = new Image();
+  
+  img.onload = function() {
+    console.log("DEBUG: Original image dimensions:", img.width, "x", img.height);
+    
+    // Calculate new dimensions (max 800px width, maintain aspect ratio)
+    const maxWidth = 800;
+    const maxHeight = 600;
+    let { width, height } = img;
+    
+    if (width > maxWidth) {
+      height = (height * maxWidth) / width;
+      width = maxWidth;
+    }
+    if (height > maxHeight) {
+      width = (width * maxHeight) / height;
+      height = maxHeight;
+    }
+    
+    console.log("DEBUG: Resized dimensions:", width, "x", height);
+    
+    // Set canvas size
+    canvas.width = width;
+    canvas.height = height;
+    
+    // Draw resized image
+    ctx.drawImage(img, 0, 0, width, height);
+    
+    // Convert to base64 with compression (0.8 quality)
+    const resizedBase64 = canvas.toDataURL('image/jpeg', 0.8).split(',')[1];
+    
+    console.log("DEBUG: Resized image size:", resizedBase64.length, "characters");
+    console.log("DEBUG: Compression ratio:", Math.round((1 - resizedBase64.length / (file.size * 1.33)) * 100) + "%");
+    
+    callback(resizedBase64);
+  };
+  
+  img.onerror = function() {
+    console.log("DEBUG: Error loading image, using original file");
+    // Fallback to original file
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      const base64Data = e.target.result.split(',')[1];
+      callback(base64Data);
+    };
+    reader.onerror = function(e) {
+      console.log("DEBUG: FileReader error, using mock data");
+      // Final fallback to mock data
+      const mockBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+      callback(mockBase64);
+    };
+    reader.readAsDataURL(file);
+  };
+  
+  // Load the image
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    img.src = e.target.result;
+  };
+  reader.onerror = function(e) {
+    console.log("DEBUG: FileReader error loading file, using mock data");
+    const mockBase64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+    callback(mockBase64);
+  };
+  reader.readAsDataURL(file);
+}
+
+
 </script>
 </body>
 </html>

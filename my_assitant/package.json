@@ -13,7 +13,15 @@
     "test:errors": "node test_runner.js tests/error_handling.js",
     "test:example": "node test_runner.js tests/example_flow.js"
   },
-  "keywords": ["testing", "e2e", "note-taking", "droidscript"],
+  "keywords": [
+    "testing",
+    "e2e",
+    "note-taking",
+    "droidscript"
+  ],
   "author": "Your Name",
-  "license": "MIT"
+  "license": "MIT",
+  "dependencies": {
+    "ws": "^8.18.3"
+  }
 }

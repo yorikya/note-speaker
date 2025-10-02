@@ -23,11 +23,13 @@ function OnStart(){
     // Load modules in dependency order
     app.LoadScript("StateManager.js", function() {
         app.LoadScript("NoteManager.js", function() {
-            app.LoadScript("AIService.js", function() {
-                app.LoadScript("CommandRouter.js", function() {
-                    app.LoadScript("WebSocketHandler.js", function() {
-                        app.LoadScript("DailySummary.js", function() {
-                            startApp();
+            app.LoadScript("ImageManager.js", function() {
+                app.LoadScript("AIService.js", function() {
+                    app.LoadScript("CommandRouter.js", function() {
+                        app.LoadScript("WebSocketHandler.js", function() {
+                            app.LoadScript("DailySummary.js", function() {
+                                startApp();
+                            });
                         });
                     });
                 });
@@ -39,6 +41,9 @@ function OnStart(){
 function startApp() {
     // Load HTML content from file
     loadHtmlContent();
+    
+    // Initialize image storage
+    ImageManager.initializeStorage();
     
     // Load notes from storage
     NoteManager.loadNotes();

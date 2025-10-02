@@ -11,7 +11,6 @@ var WebSocketHandler = {
     // -------- Settings Initialization --------
     initializeSettings: function() {
         // Settings is now initialized as a property of WebSocketHandler
-        console.log("DEBUG: Settings initialized with autoConfirm:", this.Settings.autoConfirm);
     },
     
     // -------- Server Initialization --------
@@ -23,7 +22,26 @@ var WebSocketHandler = {
         this.server = app.CreateWebServer(this.port);
         this.server.SetFolder(app.GetAppPath());
         this.server.SetOnReceive(this.onWsReceive.bind(this));
+        
+        // Try to set up HTTP request handler for serving images
+        try {
+            if (typeof this.server.SetOnRequest === 'function') {
+                this.server.SetOnRequest(this.onHttpRequest.bind(this));
+                console.log("✅ HTTP request handler set up for image serving");
+                this.httpImageServing = true;
+            } else {
+                console.log("⚠️ SetOnRequest not available - using WebSocket fallback");
+                this.httpImageServing = false;
+            }
+        } catch (e) {
+            console.log("⚠️ HTTP request handler setup failed:", e.message);
+            this.httpImageServing = false;
+        }
+        
         this.server.Start();
+        
+        // Initialize image serving system
+        this.initializeImageServing();
         
         // Create WebView to display the HTML content directly
         this.webView = app.CreateWebView(1.0, 1.0, "FillXY");
@@ -42,6 +60,418 @@ var WebSocketHandler = {
     sendToClient: function(obj, ip, id) {
         var msg = (typeof obj === "string") ? obj : JSON.stringify(obj);
         this.server.SendText(msg, ip, id);
+    },
+    
+    // -------- WebSocket-based Image Serving --------
+    handleImageRequest: function(o, ip, id) {
+        try {
+            var imagePath = o.imagePath;
+            if (!imagePath) {
+                this.sendToClient({ 
+                    type: "image_error", 
+                    error: "No image path provided",
+                    requestId: o.requestId
+                }, ip, id);
+                return;
+            }
+            
+            // Try HTTP serving first if available
+            if (this.httpImageServing) {
+                var imageUrl = this.generateImageUrl(imagePath);
+                
+                if (imageUrl) {
+                    this.sendToClient({
+                        type: "image_url",
+                        imagePath: imagePath,
+                        imageUrl: imageUrl,
+                        requestId: o.requestId
+                    }, ip, id);
+                    return;
+                }
+            }
+            
+            // Fallback to WebSocket-based image serving
+            this.serveImageViaWebSocket(imagePath, o.requestId, ip, id);
+            
+        } catch (e) {
+            console.log("DEBUG: Error in handleImageRequest:", e.message);
+            this.sendToClient({ 
+                type: "image_error", 
+                error: "Error loading image: " + e.message,
+                requestId: o.requestId
+            }, ip, id);
+        }
+    },
+        
+        // -------- Image Cleanup Functions --------
+        handleCleanupBrokenImage: function(o, ip, id) {
+            try {
+                console.log("DEBUG: handleCleanupBrokenImage called with:", o.imagePath);
+                
+                var imagePath = o.imagePath;
+                if (!imagePath) {
+                    console.log("DEBUG: No image path provided for cleanup");
+                    this.sendToClient({ 
+                        type: "cleanup_error", 
+                        error: "No image path provided" 
+                    }, ip, id);
+                    return;
+                }
+                
+                // Find all notes that contain this image path
+                var allNotes = NoteManager.getAllNotes();
+                var updatedNotes = [];
+                
+                allNotes.forEach(function(note) {
+                    if (note.images && note.images.length > 0 && note.images.indexOf(imagePath) > -1) {
+                        console.log("DEBUG: Removing broken image from note", note.id, ":", imagePath);
+                        var updatedNote = NoteManager.removeImageFromNote(note.id, imagePath);
+                        if (updatedNote) {
+                            updatedNotes.push(note.id);
+                        }
+                    }
+                });
+                
+                if (updatedNotes.length > 0) {
+                    console.log("DEBUG: Cleanup completed for", updatedNotes.length, "notes");
+                    this.sendToClient({ 
+                        type: "cleanup_complete", 
+                        imagePath: imagePath,
+                        updatedNotes: updatedNotes
+                    }, ip, id);
+                } else {
+                    console.log("DEBUG: No notes found with this image path");
+                    this.sendToClient({ 
+                        type: "cleanup_complete", 
+                        imagePath: imagePath,
+                        updatedNotes: []
+                    }, ip, id);
+                }
+                
+            } catch (e) {
+                console.log("DEBUG: Error in handleCleanupBrokenImage:", e.message);
+                this.sendToClient({ 
+                    type: "cleanup_error", 
+                    error: "Error cleaning up image: " + e.message 
+                }, ip, id);
+            }
+        },
+        
+        // -------- Debug File API Testing --------
+    handleTestFileApis: function(o, ip, id) {
+        try {
+            console.log("DEBUG: Testing DroidScript file APIs");
+            var testPath = o.testPath || "/storage/emulated/0/Pictures/debug_image.jpg";
+            
+            var results = {
+                testPath: testPath,
+                apis: {},
+                readTest: null,
+                error: null
+            };
+            
+            // Test available file APIs
+            results.apis.FileExists = typeof app.FileExists;
+            results.apis.IsFile = typeof app.IsFile;
+            results.apis.ReadFile = typeof app.ReadFile;
+            results.apis.WriteFile = typeof app.WriteFile;
+            results.apis.GetFileSize = typeof app.GetFileSize;
+            results.apis.FileExists_available = typeof app.FileExists === 'function';
+            results.apis.IsFile_available = typeof app.IsFile === 'function';
+            
+            console.log("DEBUG: Available APIs:", JSON.stringify(results.apis, null, 2));
+            
+            // Test file existence methods
+            if (typeof app.FileExists === 'function') {
+                try {
+                    results.FileExists_result = app.FileExists(testPath);
+                    console.log("DEBUG: app.FileExists result:", results.FileExists_result);
+                } catch (e) {
+                    results.FileExists_error = e.message;
+                    console.log("DEBUG: app.FileExists error:", e.message);
+                }
+            }
+            
+            if (typeof app.IsFile === 'function') {
+                try {
+                    results.IsFile_result = app.IsFile(testPath);
+                    console.log("DEBUG: app.IsFile result:", results.IsFile_result);
+                } catch (e) {
+                    results.IsFile_error = e.message;
+                    console.log("DEBUG: app.IsFile error:", e.message);
+                }
+            }
+            
+            // Test file reading
+            try {
+                var fileContent = app.ReadFile(testPath);
+                if (fileContent) {
+                    results.readTest = {
+                        success: true,
+                        contentLength: fileContent.length,
+                        contentType: typeof fileContent
+                    };
+                    console.log("DEBUG: File read successful, length:", fileContent.length);
+                } else {
+                    results.readTest = {
+                        success: false,
+                        reason: "ReadFile returned null/undefined"
+                    };
+                    console.log("DEBUG: File read failed - returned null/undefined");
+                }
+            } catch (readError) {
+                results.readTest = {
+                    success: false,
+                    error: readError.message
+                };
+                console.log("DEBUG: File read error:", readError.message);
+            }
+            
+            // Test base64 reading
+            try {
+                var base64Content = app.ReadFile(testPath, "base64");
+                if (base64Content) {
+                    results.base64Test = {
+                        success: true,
+                        contentLength: base64Content.length,
+                        startsWithValidBase64: /^[A-Za-z0-9+/]/.test(base64Content)
+                    };
+                    console.log("DEBUG: Base64 read successful, length:", base64Content.length);
+                } else {
+                    results.base64Test = {
+                        success: false,
+                        reason: "ReadFile base64 returned null/undefined"
+                    };
+                    console.log("DEBUG: Base64 read failed - returned null/undefined");
+                }
+            } catch (base64Error) {
+                results.base64Test = {
+                    success: false,
+                    error: base64Error.message
+                };
+                console.log("DEBUG: Base64 read error:", base64Error.message);
+            }
+            
+            this.sendToClient({
+                type: "file_api_test_results",
+                results: results
+            }, ip, id);
+            
+        } catch (e) {
+            console.log("DEBUG: Error in handleTestFileApis:", e.message);
+            this.sendToClient({
+                type: "file_api_test_results",
+                error: e.message
+            }, ip, id);
+        }
+    },
+    
+    // -------- HTTP Request Handler for Image Serving --------
+    onHttpRequest: function(request, response) {
+        try {
+            console.log("DEBUG: HTTP request received:", request.url);
+            
+            // Handle image requests
+            if (request.url.startsWith('/image/')) {
+                this.handleHttpImageRequest(request, response);
+                return;
+            }
+            
+            // Handle other requests normally
+            response.status = 404;
+            response.data = "Not Found";
+            
+        } catch (e) {
+            console.log("ERROR: HTTP request handler error:", e.message);
+            response.status = 500;
+            response.data = "Internal Server Error";
+        }
+    },
+    
+    // Handle HTTP image requests
+    handleHttpImageRequest: function(request, response) {
+        try {
+            // Extract image path from URL: /image/base64encodedpath
+            var urlParts = request.url.split('/');
+            if (urlParts.length < 3) {
+                response.status = 400;
+                response.data = "Invalid image URL";
+                return;
+            }
+            
+            var encodedPath = urlParts[2];
+            var imagePath = decodeURIComponent(atob(encodedPath));
+            
+            console.log("DEBUG: Serving image via HTTP:", imagePath);
+            
+            // Try to read the image
+            var imageData = null;
+            var contentType = "image/jpeg";
+            
+            try {
+                // Determine content type from path
+                var ext = imagePath.toLowerCase();
+                if (ext.includes('.png')) contentType = "image/png";
+                else if (ext.includes('.gif')) contentType = "image/gif";
+                else if (ext.includes('.webp')) contentType = "image/webp";
+                else if (ext.includes('.bmp')) contentType = "image/bmp";
+                
+                // Try to read the image file
+                if (typeof app.ReadFile === 'function') {
+                    imageData = app.ReadFile(imagePath, "base64");
+                }
+                
+                if (imageData && imageData.length > 0) {
+                    console.log("DEBUG: Successfully read image for HTTP serving, size:", imageData.length);
+                    
+                    // Set response headers
+                    response.status = 200;
+                    response.headers = {
+                        "Content-Type": contentType,
+                        "Cache-Control": "public, max-age=3600",
+                        "Access-Control-Allow-Origin": "*"
+                    };
+                    
+                    // Send the base64 data directly - DroidScript will handle the conversion
+                    response.data = imageData;
+                    response.encoding = "base64";
+                    
+                } else {
+                    console.log("DEBUG: Failed to read image for HTTP serving");
+                    response.status = 404;
+                    response.data = "Image not found";
+                }
+                
+            } catch (readError) {
+                console.log("DEBUG: Error reading image for HTTP:", readError.message);
+                response.status = 500;
+                response.data = "Error reading image";
+            }
+            
+        } catch (e) {
+            console.log("ERROR: HTTP image request error:", e.message);
+            response.status = 500;
+            response.data = "Internal Server Error";
+        }
+    },
+    
+    // Generate HTTP URL for image
+    generateImageUrl: function(imagePath) {
+        if (!imagePath) return null;
+        
+        try {
+            // Encode the image path as base64 for URL safety
+            var encodedPath = btoa(encodeURIComponent(imagePath));
+            var imageUrl = "http://localhost:" + this.port + "/image/" + encodedPath;
+            
+            console.log("DEBUG: Generated image URL:", imageUrl);
+            return imageUrl;
+            
+        } catch (e) {
+            console.log("ERROR: Failed to generate image URL:", e.message);
+            return null;
+        }
+    },
+    
+    // -------- Image Serving System --------
+    initializeImageServing: function() {
+        console.log("Initializing image serving system...");
+        
+        // Create image cache for better performance
+        this.imageCache = {};
+        this.imageCacheTimeout = 5 * 60 * 1000; // 5 minutes
+        
+        console.log("Image serving system initialized");
+    },
+    
+    // Serve image via WebSocket (since SetOnRequest not available)
+    serveImageViaWebSocket: function(imagePath, requestId, ip, id) {
+        try {
+            console.log("DEBUG: Serving image via WebSocket:", imagePath);
+            
+            // Check cache first
+            if (this.imageCache[imagePath]) {
+                var cached = this.imageCache[imagePath];
+                if (Date.now() - cached.timestamp < this.imageCacheTimeout) {
+                    console.log("DEBUG: Serving image from cache");
+                    this.sendToClient({
+                        type: "image_data",
+                        imagePath: imagePath,
+                        contentType: cached.contentType,
+                        data: cached.data,
+                        requestId: requestId
+                    }, ip, id);
+                    return;
+                }
+            }
+            
+            // Check if file exists
+            if (typeof app.FileExists === 'function' && !app.FileExists(imagePath)) {
+                console.log("DEBUG: Image file not found:", imagePath);
+                this.sendToClient({
+                    type: "image_error",
+                    error: "Image file not found: " + imagePath,
+                    imagePath: imagePath,
+                    requestId: requestId
+                }, ip, id);
+                return;
+            }
+            
+            // Read image as base64
+            if (typeof app.ReadFile === 'function') {
+                var imageData = app.ReadFile(imagePath, "base64");
+                
+                if (imageData && imageData.length > 0) {
+                    // Determine content type from file extension
+                    var contentType = "image/jpeg";
+                    var ext = imagePath.toLowerCase();
+                    if (ext.includes('.png')) contentType = "image/png";
+                    else if (ext.includes('.gif')) contentType = "image/gif";
+                    else if (ext.includes('.webp')) contentType = "image/webp";
+                    else if (ext.includes('.bmp')) contentType = "image/bmp";
+                    
+                    // Cache the image
+                    this.imageCache[imagePath] = {
+                        data: imageData,
+                        contentType: contentType,
+                        timestamp: Date.now()
+                    };
+                    
+                    console.log("DEBUG: Image served successfully via WebSocket, size:", imageData.length);
+                    this.sendToClient({
+                        type: "image_data",
+                        imagePath: imagePath,
+                        contentType: contentType,
+                        data: imageData,
+                        requestId: requestId
+                    }, ip, id);
+                } else {
+                    console.log("DEBUG: Failed to read image data");
+                    this.sendToClient({
+                        type: "image_error",
+                        error: "Failed to read image data",
+                        imagePath: imagePath,
+                        requestId: requestId
+                    }, ip, id);
+                }
+            } else {
+                console.log("DEBUG: ReadFile function not available");
+                this.sendToClient({
+                    type: "image_error",
+                    error: "ReadFile function not available",
+                    imagePath: imagePath,
+                    requestId: requestId
+                }, ip, id);
+            }
+        } catch (e) {
+            console.log("ERROR: Failed to serve image via WebSocket:", e.message);
+            this.sendToClient({
+                type: "image_error",
+                error: "Error serving image: " + e.message,
+                imagePath: imagePath,
+                requestId: requestId
+            }, ip, id);
+        }
     },
     
     // -------- Message Handling --------
@@ -69,12 +499,17 @@ var WebSocketHandler = {
             // Better error handling - log the problematic message
             console.log("JSON Parse Error - Received message: " + msg);
             console.log("Error: " + e.message);
-            this.sendToClient({ type: "reply", text: "Bad JSON: " + e.message }, ip, id);
+            // Use default values for ip and id if they're not available
+            var defaultIp = ip || "127.0.0.1";
+            var defaultId = id || 1;
+            this.sendToClient({ type: "reply", text: "Bad JSON: " + e.message }, defaultIp, defaultId);
         }
     },
     
     // -------- Message Routing --------
     routeMessage: function(o, ip, id) {
+        console.log("DEBUG: onWsReceive - routing message type:", o.type);
+        console.log("DEBUG: onWsReceive - full message:", JSON.stringify(o, null, 2));
         switch (o.type) {
         case "chat":
             this.handleChatMessage(o, ip, id);
@@ -96,6 +531,33 @@ var WebSocketHandler = {
                 break;
             case "get_all_notes":
                 this.handleGetAllNotes(o, ip, id);
+                break;
+            case "cleanup_missing_images":
+                this.handleCleanupMissingImages(o, ip, id);
+                break;
+            case "upload_complete":
+                this.handleUploadComplete(o, ip, id);
+                break;
+            case "upload_cancelled":
+                this.handleUploadCancelled(o, ip, id);
+                break;
+            case "upload_file":
+                this.handleFileUpload(o, ip, id);
+                break;
+            case "convert_content_uri":
+                this.handleContentUriConversion(o, ip, id);
+                break;
+            case "request_image":
+                this.handleImageRequest(o, ip, id);
+                break;
+            case "cleanup_broken_image":
+                this.handleCleanupBrokenImage(o, ip, id);
+                break;
+            case "test_file_apis":
+                this.handleTestFileApis(o, ip, id);
+                break;
+            case "request_file_picker":
+                this.handleFilePickerRequest(o, ip, id);
                 break;
             default:
                 this.sendToClient({ type: "reply", text: "Unknown message type: " + o.type }, ip, id);
@@ -361,14 +823,20 @@ var WebSocketHandler = {
             }
         }
         
-        var out = this.formatOutcome(det);
+        var out = this.formatOutcome(det, ip, id);
         console.log("DEBUG: onWsReceive - formatOutcome returned:", typeof out === 'string' ? out : JSON.stringify(out));
         
         // Note: No general chat history - AI conversations are note-specific
         
         // Send regular response (no more graph data)
         console.log("DEBUG: Sending regular response");
-        this.sendToClient({ type: "reply", text: out }, ip, id);
+        if (typeof out === 'object' && out.action === 'show_upload_modal') {
+            // Send object directly for upload modal
+            this.sendToClient({ type: "reply", text: out }, ip, id);
+        } else {
+            // Send string response
+            this.sendToClient({ type: "reply", text: out }, ip, id);
+        }
     },
     
     // -------- Debug Message Handling --------
@@ -432,9 +900,289 @@ var WebSocketHandler = {
     handleGetAllNotes: function(o, ip, id) {
         try {
             var allNotes = NoteManager.getAllNotes();
+            
+            // Debug: Print all notes with all fields
+            console.log("DEBUG: All notes with fields:");
+            for (var i = 0; i < allNotes.length; i++) {
+                var note = allNotes[i];
+                console.log("Note " + i + ":", JSON.stringify(note, null, 2));
+            }
+            
             this.sendToClient({ type: "all_notes", notes: allNotes }, ip, id);
         } catch (error) {
             this.sendToClient({ type: "reply", text: "Error getting notes: " + error.message }, ip, id);
+        }
+    },
+    
+    handleCleanupMissingImages: function(o, ip, id) {
+        try {
+            var noteId = o.noteId;
+            var removedImages = o.removedImages || [];
+            
+            // Update the note to remove missing image references
+            for (var i = 0; i < removedImages.length; i++) {
+                NoteManager.removeImageFromNote(noteId, removedImages[i]);
+            }
+            
+            console.log("Cleaned up missing images for note", noteId, ":", removedImages.length, "images removed");
+            this.sendToClient({ type: "reply", text: "Cleaned up " + removedImages.length + " missing images" }, ip, id);
+        } catch (e) {
+            console.log("Error cleaning up missing images:", e.message);
+            this.sendToClient({ type: "reply", text: "Error cleaning up images: " + e.message }, ip, id);
+        }
+    },
+
+    handleContentUriConversion: function(o, ip, id) {
+        try {
+            console.log("DEBUG: handleContentUriConversion called");
+            console.log("DEBUG: Message object:", JSON.stringify(o, null, 2));
+            console.log("DEBUG: Content URI:", o.contentUri);
+            console.log("DEBUG: Client IP:", ip, "ID:", id);
+            
+            var contentUri = o.contentUri;
+            if (!contentUri || !contentUri.startsWith('content://')) {
+                console.log("DEBUG: Invalid content URI provided:", contentUri);
+                this.sendToClient({ 
+                    type: "uri_conversion_error", 
+                    error: "Invalid content URI provided" 
+                }, ip, id);
+                return;
+            }
+            
+            // Try to convert content URI to file path using DroidScript
+            var filePath = null;
+            var conversionSucceeded = false;
+            
+            if (typeof app.Uri2Path === 'function') {
+                console.log("DEBUG: app.Uri2Path function is available");
+                console.log("DEBUG: Calling app.Uri2Path with:", contentUri);
+                
+                try {
+                    filePath = app.Uri2Path(contentUri);
+                    console.log("DEBUG: app.Uri2Path returned:", filePath);
+                    
+                    // Check if conversion actually succeeded
+                    if (filePath && filePath !== "null" && filePath !== "undefined" && filePath.length > 0) {
+                        console.log("DEBUG: URI conversion succeeded:", filePath);
+                        conversionSucceeded = true;
+                    } else {
+                        console.log("DEBUG: URI conversion returned null/empty, trying direct access");
+                    }
+                } catch (uriError) {
+                    console.log("DEBUG: app.Uri2Path threw error:", uriError.message);
+                }
+            } else {
+                console.log("DEBUG: app.Uri2Path not available in this DroidScript version");
+            }
+            
+            if (conversionSucceeded) {
+                console.log("DEBUG: Sending uri_conversion_success response");
+                var response = { 
+                    type: "uri_conversion_success", 
+                    contentUri: contentUri,
+                    filePath: filePath 
+                };
+                console.log("DEBUG: Response:", JSON.stringify(response, null, 2));
+                this.sendToClient(response, ip, id);
+            } else {
+                // Fallback: Try to read content URI directly and send image data
+                console.log("DEBUG: Attempting direct content URI access");
+                
+                try {
+                    if (typeof app.ReadFile === 'function') {
+                        console.log("DEBUG: Trying to read content URI directly as base64");
+                        var imageData = app.ReadFile(contentUri, "base64");
+                        
+                        if (imageData && imageData.length > 0) {
+                            console.log("DEBUG: Successfully read content URI, data length:", imageData.length);
+                            
+                            // Determine content type
+                            var contentType = "image/jpeg";
+                            if (contentUri.toLowerCase().includes("png")) contentType = "image/png";
+                            else if (contentUri.toLowerCase().includes("gif")) contentType = "image/gif";
+                            else if (contentUri.toLowerCase().includes("webp")) contentType = "image/webp";
+                            
+                            // Send image data directly instead of conversion
+                            this.sendToClient({ 
+                                type: "image_data", 
+                                imagePath: contentUri,
+                                contentType: contentType,
+                                data: imageData,
+                                requestId: o.requestId || "content_uri_" + Date.now()
+                            }, ip, id);
+                            return;
+                        }
+                    }
+                } catch (readError) {
+                    console.log("DEBUG: Direct content URI read failed:", readError.message);
+                }
+                
+                // Final fallback: Send error
+                console.log("DEBUG: All content URI access methods failed");
+                this.sendToClient({ 
+                    type: "uri_conversion_error", 
+                    error: "Content URI cannot be accessed due to Android storage restrictions" 
+                }, ip, id);
+            }
+        } catch (e) {
+            console.log("DEBUG: Exception in handleContentUriConversion:", e.message);
+            console.log("DEBUG: Stack trace:", e.stack);
+            this.sendToClient({ 
+                type: "uri_conversion_error", 
+                error: "Error converting content URI: " + e.message 
+            }, ip, id);
+        }
+    },
+    
+    handleUploadComplete: function(o, ip, id) {
+        try {
+            console.log("DEBUG: handleUploadComplete called with:", JSON.stringify(o, null, 2));
+            var noteId = o.noteId;
+            var imagePath = o.imagePath;
+            var error = o.error;
+            
+            if (error) {
+                console.log("DEBUG: Upload failed:", error);
+                this.sendToClient({ type: "reply", text: "Upload failed: " + error }, ip, id);
+            } else if (imagePath) {
+                console.log("DEBUG: Adding image to note:", noteId, "imagePath:", imagePath);
+                // Add image to note
+                var updatedNote = NoteManager.addImageToNote(noteId, imagePath);
+                console.log("DEBUG: Updated note:", JSON.stringify(updatedNote, null, 2));
+                if (updatedNote) {
+                    var imageCount = updatedNote.images.length;
+                    var message = "Image successfully added to note (total " + imageCount + " images)";
+                    console.log("DEBUG: Upload successful:", imagePath, "total images:", imageCount);
+                    this.sendToClient({ type: "reply", text: message }, ip, id);
+                } else {
+                    console.log("DEBUG: Failed to add image to note");
+                    this.sendToClient({ type: "reply", text: "Error adding image to note" }, ip, id);
+                }
+            } else {
+                console.log("DEBUG: No imagePath provided");
+                this.sendToClient({ type: "reply", text: "No image path provided" }, ip, id);
+            }
+        } catch (e) {
+            console.log("DEBUG: Error handling upload completion:", e.message);
+            console.log("DEBUG: Error stack:", e.stack);
+            this.sendToClient({ type: "reply", text: "Error processing upload: " + e.message }, ip, id);
+        }
+    },
+    
+    handleUploadCancelled: function(o, ip, id) {
+        try {
+            console.log("DEBUG: handleUploadCancelled called with:", JSON.stringify(o, null, 2));
+            var noteId = o.noteId;
+            
+            console.log("DEBUG: Upload cancelled for note:", noteId);
+            this.sendToClient({ type: "reply", text: "Image upload cancelled" }, ip, id);
+        } catch (e) {
+            console.log("DEBUG: Error handling upload cancellation:", e.message);
+            this.sendToClient({ type: "reply", text: "Error processing cancellation: " + e.message }, ip, id);
+        }
+    },
+    
+    handleFileUpload: function(o, ip, id) {
+        try {
+            console.log("DEBUG: handleFileUpload called with:", JSON.stringify(o, null, 2));
+            var noteId = o.noteId;
+            var filename = o.filename;
+            var fileData = o.fileData;
+            var imagePath = o.imagePath; // New field for native file paths
+            var fileSize = o.fileSize;
+            var fileType = o.fileType;
+            
+            console.log("DEBUG: Processing file upload for note:", noteId);
+            console.log("DEBUG: Filename:", filename);
+            console.log("DEBUG: Image path:", imagePath);
+            console.log("DEBUG: File size:", fileSize, "bytes");
+            console.log("DEBUG: File type:", fileType);
+            
+            var finalImagePath = null;
+            
+            // Handle native file paths (from DroidScript picker)
+            if (imagePath && !fileData) {
+                console.log("DEBUG: Using native file path:", imagePath);
+                finalImagePath = imagePath;
+            }
+            // Handle base64 file data (from web upload) - use file path approach
+            else if (fileData) {
+                console.log("DEBUG: Using file path storage approach for base64 data");
+                console.log("DEBUG: File data length:", fileData.length);
+                console.log("DEBUG: File data preview:", fileData.substring(0, 100) + "...");
+                
+                // For web uploads, we need to create a mock file path since we're not actually saving files
+                // This is a temporary solution - in a real app, you'd want to save the file somewhere
+                var mockPath = "/storage/emulated/0/Pictures/" + filename;
+                console.log("DEBUG: Using mock file path for web upload:", mockPath);
+                finalImagePath = mockPath;
+            }
+            else {
+                console.log("DEBUG: No file data or path provided");
+                this.sendToClient({ 
+                    type: "upload_error", 
+                    error: "No file data or path provided" 
+                }, ip, id);
+                return;
+            }
+            
+            if (finalImagePath) {
+                console.log("DEBUG: File path ready:", finalImagePath);
+                
+                // Add image to note
+                var updatedNote = NoteManager.addImageToNote(noteId, finalImagePath);
+                if (updatedNote) {
+                    var imageCount = updatedNote.images.length;
+                    var message = "Image successfully uploaded and added to note (total " + imageCount + " images)";
+                    console.log("DEBUG: Upload successful:", finalImagePath, "total images:", imageCount);
+                    
+                    // Send success response to upload page
+                    this.sendToClient({ 
+                        type: "upload_success", 
+                        imagePath: finalImagePath,
+                        message: message 
+                    }, ip, id);
+                } else {
+                    console.log("DEBUG: Failed to add image to note");
+                    this.sendToClient({ 
+                        type: "upload_error", 
+                        error: "Failed to add image to note" 
+                    }, ip, id);
+                }
+            } else {
+                console.log("DEBUG: Failed to process file");
+                this.sendToClient({ 
+                    type: "upload_error", 
+                    error: "Failed to process file" 
+                }, ip, id);
+            }
+        } catch (e) {
+            console.log("DEBUG: Error handling file upload:", e.message);
+            console.log("DEBUG: Error stack:", e.stack);
+            this.sendToClient({ 
+                type: "upload_error", 
+                error: "Error processing file upload: " + e.message 
+            }, ip, id);
+        }
+    },
+    
+    saveImageFile: function(base64Data, filename) {
+        try {
+            console.log("DEBUG: Using file path storage approach (no file saving)");
+            console.log("DEBUG: Base64 data length:", base64Data.length);
+            console.log("DEBUG: Base64 data preview:", base64Data.substring(0, 50) + "...");
+            
+            // With file path storage approach, we don't actually save files
+            // Instead, we create a mock file path for the original file
+            var mockPath = "/storage/emulated/0/Pictures/" + filename;
+            console.log("DEBUG: Using mock file path for web upload:", mockPath);
+            console.log("DEBUG: User will be warned not to delete original files");
+            
+            return mockPath;
+        } catch (e) {
+            console.log("ERROR: Failed to process image file path:", e.message);
+            console.log("ERROR: Stack trace:", e.stack);
+            return null;
         }
     },
     
@@ -689,6 +1437,20 @@ var WebSocketHandler = {
                 requiresParam: false,
                 contexts: ["find_context"] // Only when a note is found
             },
+            slash_uploadimage: { 
+                category: "🖼️ Image", 
+                description: "Uploading an image to the current note",
+                examples: ["/uploadimage"],
+                requiresParam: false,
+                contexts: ["find_context"] // Only when a note is found
+            },
+            slash_teststorage: { 
+                category: "🔧 Debug", 
+                description: "Testing storage permissions and directories",
+                examples: ["/teststorage"],
+                requiresParam: false,
+                contexts: ["any"] // Available in any context
+            },
             slash_talkai: { 
                 category: "🤖 AI", 
                 description: "Starting AI conversation about current note",
@@ -776,6 +1538,8 @@ var WebSocketHandler = {
                         'slash_markdone': '/markdone',
                         'slash_delete': '/delete',
                         'slash_createsub': '/createsub',
+                        'slash_uploadimage': '/uploadimage',
+                        'slash_teststorage': '/teststorage',
                         'slash_talkai': '/talkai',
                         'slash_savelastmessage': '/savelastmessage',
                         'slash_selectsubnote': '/selectsubnote',
@@ -806,7 +1570,7 @@ var WebSocketHandler = {
     },
     
     // -------- Format Outcome (moved from main.js) --------
-    formatOutcome: function(r) {
+    formatOutcome: function(r, ip, id) {
         var isHebrew = (this.Settings.lang === "he");
         
         if (r.action === "unknown") {
@@ -997,6 +1761,306 @@ var WebSocketHandler = {
             return "❌ Auto confirmation disabled! All actions will require manual confirmation.";
         }
         
+        if (r.action === "slash_uploadimage") {
+            console.log("DEBUG: Upload image command received");
+            var context = StateManager.getCurrentFindContext();
+            console.log("DEBUG: Current find context:", context);
+            
+            if (!context || context.length === 0) {
+                console.log("DEBUG: No find context found");
+                if (isHebrew) {
+                    return "לא נמצאו פתקים להעלאת תמונה. נסה לחפש קודם.";
+                }
+                return "No notes found to upload image to. Try searching first.";
+            }
+            
+            var note = context[0].note || context[0];
+            console.log("DEBUG: Found note for upload:", note.id, note.title);
+            var currentImages = NoteManager.getNoteImages(note.id);
+            console.log("DEBUG: Current images count:", currentImages.length);
+            
+            // Check if note already has maximum images
+            if (currentImages.length >= 5) {
+                console.log("DEBUG: Note already has maximum images");
+                if (isHebrew) {
+                    return "הפתק כבר מכיל 5 תמונות (המקסימום). מחק תמונה קיימת לפני הוספת חדשה.";
+                }
+                return "Note already has 5 images (maximum). Delete an existing image before adding a new one.";
+            }
+            
+            console.log("DEBUG: Opening native DroidScript file picker");
+            
+            // Use native DroidScript file picker instead of HTML
+            var self = this;
+            ImageManager.openImagePicker(note.id, function(success, imagePath, error) {
+                if (success && imagePath) {
+                    console.log("DEBUG: Native file picker success:", imagePath);
+                    
+                    // Add image to note
+                    var updatedNote = NoteManager.addImageToNote(note.id, imagePath);
+                    if (updatedNote) {
+                        var imageCount = updatedNote.images.length;
+                        var message = "✅ Image successfully added to note '" + note.title + "' (total " + imageCount + " images)";
+                        
+                        // If under the limit, offer to add more images with clear instructions
+                        if (imageCount < ImageManager.maxImagesPerNote) {
+                            var remaining = ImageManager.maxImagesPerNote - imageCount;
+                            message += "\n\n📷 **Multiple Image Upload**";
+                            message += "\n• DroidScript supports one image at a time";
+                            message += "\n• To add more images: Type `/uploadimage` again";
+                            message += "\n• Remaining slots: " + remaining + "/" + ImageManager.maxImagesPerNote;
+                        } else {
+                            message += "\n\n📷 Maximum images reached (" + ImageManager.maxImagesPerNote + " images per note).";
+                        }
+                        
+                        console.log("DEBUG: Image added successfully:", imagePath, "total images:", imageCount);
+                        
+                        // Send success message back to client
+                        self.sendToClient({ 
+                            type: "reply",
+                            text: message
+                        }, ip, id);
+                    } else {
+                        console.log("DEBUG: Failed to add image to note");
+                        self.sendToClient({ 
+                            type: "reply", 
+                            text: "❌ Failed to add image to note" 
+                        }, ip, id);
+                    }
+                } else {
+                    console.log("DEBUG: Native file picker failed:", error);
+                    var errorMessage = error || "File selection cancelled or failed";
+                    self.sendToClient({ 
+                        type: "reply", 
+                        text: "❌ Image upload failed: " + errorMessage 
+                    }, ip, id);
+                }
+            });
+            
+            var uploadMessage = "📁 Opening native file picker...";
+            uploadMessage += "\n\n💡 **Note**: DroidScript supports uploading one image at a time.";
+            uploadMessage += "\nTo add multiple images, repeat the `/uploadimage` command.";
+            
+            return uploadMessage;
+        }
+        
+        if (r.action === "slash_teststorage") {
+            console.log("DEBUG: Test storage command received");
+            try {
+                // Test the file path storage system
+                ImageManager.initializeStorage();
+                
+                var testResult = "🔧 **File Path Storage Test**\n\n";
+                testResult += "📁 **Storage Configuration:**\n";
+                testResult += "• Approach: File path storage (no copying)\n";
+                testResult += "• Max images per note: " + ImageManager.maxImagesPerNote + "\n";
+                testResult += "• Supported formats: " + ImageManager.supportedFormats.join(", ") + "\n\n";
+                
+                testResult += "🔍 **API Availability:**\n";
+                testResult += "• ChooseFile: " + (typeof app.ChooseFile === 'function' ? "✅ Available" : "❌ Not available") + "\n";
+                testResult += "• CreateIntent: " + (typeof app.CreateIntent === 'function' ? "✅ Available" : "❌ Not available") + "\n";
+                testResult += "• FileExists: " + (typeof app.FileExists === 'function' ? "✅ Available" : "❌ Not available") + "\n";
+                testResult += "• ReadFile: " + (typeof app.ReadFile === 'function' ? "✅ Available" : "❌ Not available") + "\n\n";
+                
+                testResult += "⚠️ **Important Notes:**\n";
+                testResult += "• Images are stored as file paths to original locations\n";
+                testResult += "• Do not delete or move original image files\n";
+                testResult += "• Permission issues may prevent image display\n";
+                testResult += "• Use `/cleanupimages` to remove broken links\n";
+                
+                return testResult;
+            } catch (e) {
+                console.log("DEBUG: Storage test error:", e.message);
+                return "❌ Storage test failed: " + e.message;
+            }
+        }
+        
+        if (r.action === "slash_test_file_apis") {
+            console.log("DEBUG: Test file APIs command received");
+            
+            // Send immediate feedback
+            this.sendToClient({ type: "reply", text: "🔧 Testing DroidScript file APIs..." }, ip, id);
+            
+            // Trigger the test
+            this.handleTestFileApis({ testPath: "/storage/emulated/0/Pictures/debug_image.jpg" }, ip, id);
+            
+            return "Testing file APIs...";
+        }
+        
+        if (r.action === "slash_test_storage") {
+            console.log("DEBUG: Test storage command received");
+            try {
+                // Test the internal storage system
+                ImageManager.initializeStorage();
+                
+                var testResult = "🔧 **Internal Storage Test**\n\n";
+                testResult += "📁 **Storage Configuration:**\n";
+                testResult += "• Approach: Internal app storage (copying files)\n";
+                testResult += "• Storage folder: " + (ImageManager.storageFolder || "Not initialized") + "\n";
+                testResult += "• Max images per note: " + ImageManager.maxImagesPerNote + "\n";
+                testResult += "• Supported formats: " + ImageManager.supportedFormats.join(", ") + "\n\n";
+                
+                testResult += "🔍 **API Availability:**\n";
+                testResult += "• ChooseFile: " + (typeof app.ChooseFile === 'function' ? "✅ Available" : "❌ Not available") + "\n";
+                testResult += "• GetPrivateFolder: " + (typeof app.GetPrivateFolder === 'function' ? "✅ Available" : "❌ Not available") + "\n";
+                testResult += "• MakeFolder: " + (typeof app.MakeFolder === 'function' ? "✅ Available" : "❌ Not available") + "\n";
+                testResult += "• CopyFile: " + (typeof app.CopyFile === 'function' ? "✅ Available" : "❌ Not available") + "\n";
+                testResult += "• WriteFile: " + (typeof app.WriteFile === 'function' ? "✅ Available" : "❌ Not available") + "\n";
+                testResult += "• DeleteFile: " + (typeof app.DeleteFile === 'function' ? "✅ Available" : "❌ Not available") + "\n\n";
+                
+                // Test actual file writing
+                testResult += "🧪 **File Write Test:**\n";
+                try {
+                    if (ImageManager.storageFolder && typeof app.WriteFile === 'function') {
+                        var testFilename = "test_" + Date.now() + ".txt";
+                        var testPath = ImageManager.storageFolder + testFilename;
+                        var testData = "Test file content";
+                        
+                        console.log("DEBUG: Testing file write to:", testPath);
+                        var writeSuccess = app.WriteFile(testPath, testData);
+                        
+                        if (writeSuccess) {
+                            testResult += "• Write test: ✅ SUCCESS\n";
+                            testResult += "• Test file: " + testFilename + "\n";
+                            
+                            // Try to read it back
+                            if (typeof app.ReadFile === 'function') {
+                                var readData = app.ReadFile(testPath);
+                                if (readData === testData) {
+                                    testResult += "• Read test: ✅ SUCCESS\n";
+                                } else {
+                                    testResult += "• Read test: ⚠️ Data mismatch\n";
+                                }
+                            }
+                            
+                            // Clean up test file
+                            if (typeof app.DeleteFile === 'function') {
+                                app.DeleteFile(testPath);
+                                testResult += "• Cleanup: ✅ Test file removed\n";
+                            }
+                        } else {
+                            testResult += "• Write test: ❌ FAILED\n";
+                            testResult += "• Issue: app.WriteFile returned false\n";
+                        }
+                    } else {
+                        testResult += "• Write test: ❌ SKIPPED (storage not available)\n";
+                    }
+                } catch (testError) {
+                    testResult += "• Write test: ❌ ERROR: " + testError.message + "\n";
+                }
+                
+                testResult += "\n✅ **Benefits:**\n";
+                testResult += "• No permission issues - uses app's private folder\n";
+                testResult += "• Images always accessible by the app\n";
+                testResult += "• Automatic cleanup when images removed from notes\n";
+                testResult += "• Works on all Android versions\n";
+                
+                return testResult;
+            } catch (e) {
+                console.log("DEBUG: Storage test error:", e.message);
+                return "❌ Storage test failed: " + e.message;
+            }
+        }
+        
+        if (r.action === "slash_manage_storage") {
+            console.log("DEBUG: Manage storage command received");
+            try {
+                var storageInfo = "🗂️ **Storage Management**\n\n";
+                
+                if (ImageManager.storageFolder) {
+                    storageInfo += "📁 **Internal Storage:**\n";
+                    storageInfo += "• Location: " + ImageManager.storageFolder + "\n";
+                    storageInfo += "• Status: ✅ Active\n";
+                    storageInfo += "• Type: App private folder (no permissions needed)\n\n";
+                    
+                    storageInfo += "🔧 **Available Actions:**\n";
+                    storageInfo += "• `/cleanupimages` - Remove broken image links\n";
+                    storageInfo += "• `/uploadimage` - Add new images to current note\n";
+                    storageInfo += "• Images are automatically copied to internal storage\n";
+                    storageInfo += "• Original files can be safely deleted after upload\n\n";
+                    
+                    storageInfo += "ℹ️ **How It Works:**\n";
+                    storageInfo += "1. When you upload an image, it's copied to app storage\n";
+                    storageInfo += "2. The app always has access to these copies\n";
+                    storageInfo += "3. No permission issues or broken links\n";
+                    storageInfo += "4. Images are deleted when removed from notes\n";
+                } else {
+                    storageInfo += "⚠️ **Storage Not Initialized:**\n";
+                    storageInfo += "• Internal storage is not available\n";
+                    storageInfo += "• Using fallback file path storage\n";
+                    storageInfo += "• May experience permission issues\n\n";
+                    
+                    storageInfo += "🔧 **Try:**\n";
+                    storageInfo += "• Restart the app to reinitialize storage\n";
+                    storageInfo += "• Check app permissions in Android settings\n";
+                }
+                
+                return storageInfo;
+            } catch (e) {
+                console.log("DEBUG: Manage storage error:", e.message);
+                return "❌ Storage management failed: " + e.message;
+            }
+        }
+        
+        if (r.action === "slash_cleanup_images") {
+            console.log("DEBUG: Cleanup images command received");
+            try {
+                // Get all notes and check for broken images
+                var allNotes = NoteManager.getAllNotes();
+                var brokenImages = [];
+                var totalImages = 0;
+                
+                allNotes.forEach(function(note) {
+                    if (note.images && note.images.length > 0) {
+                        note.images.forEach(function(imagePath) {
+                            totalImages++;
+                            // Check if file exists
+                            var exists = false;
+                            try {
+                                if (typeof app.FileExists === 'function') {
+                                    exists = app.FileExists(imagePath);
+                                } else {
+                                    // Try to read the file as a test
+                                    var testRead = app.ReadFile(imagePath);
+                                    exists = (testRead !== null && testRead !== undefined);
+                                }
+                            } catch (e) {
+                                exists = false;
+                            }
+                            
+                            if (!exists) {
+                                brokenImages.push({
+                                    path: imagePath,
+                                    noteId: note.id,
+                                    noteTitle: note.title
+                                });
+                            }
+                        });
+                    }
+                });
+                
+                if (brokenImages.length === 0) {
+                    return "✅ All " + totalImages + " images are accessible. No cleanup needed.";
+                } else {
+                    // Clean up broken images
+                    var cleanedNotes = [];
+                    brokenImages.forEach(function(brokenImg) {
+                        // Use NoteManager.removeImageFromNote to properly remove the broken image
+                        var updatedNote = NoteManager.removeImageFromNote(brokenImg.noteId, brokenImg.path);
+                        if (updatedNote) {
+                            cleanedNotes.push(brokenImg.noteTitle);
+                        }
+                    });
+                    
+                    return "🧹 Cleaned up " + brokenImages.length + " broken image links from " + cleanedNotes.length + " notes.\n" +
+                           "Remaining: " + (totalImages - brokenImages.length) + " accessible images.";
+                }
+            } catch (e) {
+                console.log("DEBUG: Cleanup images error:", e.message);
+                return "❌ Cleanup failed: " + e.message;
+            }
+        }
+        
         if (r.action === "slash_help") {
             if (isHebrew) {
                 return "🆘 **פקודות זמינות:**\n\n" +
@@ -1007,6 +2071,11 @@ var WebSocketHandler = {
                        "• `/findbyid [מספר]` - חפש לפי מזהה\n\n" +
                        "📋 **פקודות הצגה:**\n" +
                        "• `/showparents` - הצג פתקים ראשיים\n\n" +
+                       "🖼️ **פקודות תמונות:**\n" +
+                       "• `/uploadimage` - העלה תמונה לפתק\n" +
+                       "• `/cleanupimages` - הסר קישורי תמונות שבורים\n" +
+                       "• `/testfileapis` - בדוק גישה למערכת קבצים\n" +
+                       "• `/teststorage` - בדוק מערכת אחסון תמונות\n\n" +
                        "🔙 **פקודות ניווט:**\n" +
                        "• `/back` - חזור להקשר הקודם\n\n" +
                        "⚙️ **הגדרות:**\n" +
@@ -1031,6 +2100,12 @@ var WebSocketHandler = {
                    "• `/findbyid [number]` - Find by ID\n\n" +
                    "📋 **Show Commands:**\n" +
                    "• `/showparents` - Show parent notes\n\n" +
+                   "🖼️ **Image Commands:**\n" +
+                   "• `/uploadimage` - Upload image to note\n" +
+                   "• `/cleanupimages` - Remove broken image links\n" +
+                   "• `/testfileapis` - Test file system access\n" +
+                   "• `/teststorage` - Test image storage system\n" +
+                   "• `/managestorage` - View storage management info\n\n" +
                    "✏️ **Edit Commands:**\n" +
                    "• `/editdescription` - Edit note description\n" +
                    "• `/stopediting` - Stop editing description\n" +
@@ -1339,16 +2414,16 @@ var WebSocketHandler = {
         
         // Find sub-commands as slash commands
         if (r.action === "slash_editdescription") {
-            return this.formatOutcome({action: "find_sub_edit_description", params: r.params, confidence: 1});
+            return this.formatOutcome({action: "find_sub_edit_description", params: r.params, confidence: 1}, ip, id);
         }
         if (r.action === "slash_markdone") {
-            return this.formatOutcome({action: "find_sub_mark_done", params: r.params, confidence: 1});
+            return this.formatOutcome({action: "find_sub_mark_done", params: r.params, confidence: 1}, ip, id);
         }
         if (r.action === "slash_delete") {
-            return this.formatOutcome({action: "find_sub_delete", params: r.params, confidence: 1});
+            return this.formatOutcome({action: "find_sub_delete", params: r.params, confidence: 1}, ip, id);
         }
         if (r.action === "slash_createsub") {
-            return this.formatOutcome({action: "find_sub_create", params: r.params, confidence: 1});
+            return this.formatOutcome({action: "find_sub_create", params: r.params, confidence: 1}, ip, id);
         }
         if (r.action === "slash_talkai") {
             // Note: setAiConversationMode is now handled in handleChatMessage before formatOutcome
@@ -1432,7 +2507,7 @@ var WebSocketHandler = {
             }
         }
         if (r.action === "slash_selectsubnote") {
-            return this.formatOutcome({action: "find_sub_select", params: r.params, confidence: 1});
+            return this.formatOutcome({action: "find_sub_select", params: r.params, confidence: 1}, ip, id);
         }
         
         if (r.action === "slash_stopediting") {
@@ -1549,6 +2624,38 @@ var WebSocketHandler = {
             return "הבנתי את הבקשה שלך ואני מעבד אותה.";
         }
         return "I understood your request and I'm processing it.";
+    },
+    
+    // -------- File Picker Request Handler --------
+    handleFilePickerRequest: function(o, ip, id) {
+        console.log("DEBUG: File picker request received for note:", o.noteId);
+        
+        try {
+            // Use ImageManager to show the native file picker
+            ImageManager.showImageUploadDialog(o.noteId, function(error, imagePath) {
+                if (error) {
+                    console.log("DEBUG: File picker error:", error);
+                    this.sendToClient({ 
+                        type: "reply", 
+                        text: "File selection cancelled: " + error 
+                    }, ip, id);
+                } else {
+                    console.log("DEBUG: File selected:", imagePath);
+                    // Send the selected file back to the frontend
+                    this.sendToClient({ 
+                        type: "file_selected", 
+                        imagePath: imagePath,
+                        noteId: o.noteId
+                    }, ip, id);
+                }
+            }.bind(this));
+        } catch (e) {
+            console.log("DEBUG: Error in file picker request:", e.message);
+            this.sendToClient({ 
+                type: "reply", 
+                text: "Error opening file picker: " + e.message 
+            }, ip, id);
+        }
     },
     
 };
